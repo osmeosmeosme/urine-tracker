@@ -181,6 +181,16 @@
     };
     const toast = (msg) => { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1800); };
 
+    // --- Normalisation des anciennes données (1) ---
+    function normalizeDay(day){
+      const base={ urinations:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false };
+      const out={...base, ...day};
+      ['coffee','alcohol','night'].forEach(k=>{ if(!Number.isFinite(out[k])) out[k]=0; });
+      if(!Array.isArray(out.urinations)) out.urinations=[];
+      if(typeof out.locked!== 'boolean') out.locked=false;
+      return out;
+    }
+
     // ---- Auth (simple PIN local) ----
     function showAuth(first){
       $('#authCard').style.display='block';
@@ -195,7 +205,15 @@
     function checkSession(){ const d=store.get(); if(d.session_exp && d.session_exp>Date.now()) return true; return false; }
 
     // ---- Data shape ----
-    function ensureDay(key){ const d=store.get(); d.days=d.days||{}; if(!d.days[key]){ d.days[key]={ urinations:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false }; } store.set(d); return d.days[key]; }
+    function ensureDay(key){
+      const d=store.get(); d.days=d.days||{};
+      if(!d.days[key]){
+        d.days[key]={ urinations:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false };
+      } else {
+        d.days[key]=normalizeDay(d.days[key]); // (2) normaliser si ancien format
+      }
+      store.set(d); return d.days[key];
+    }
 
     // ---- UI builders ----
     function buildPills(container, labels, current, onPick){
@@ -213,9 +231,9 @@
       const kpi=[
         {t:'Pipis',v:day.urinations.length},
         {t:'Eau (L)',v: day.water ?? '—'},
-        {t:'Cafés',v: day.coffee},
-        {t:'Alcool',v: day.alcohol},
-        {t:'Nuit',v: day.night},
+        {t:'Cafés',v: Number.isFinite(day.coffee)?day.coffee:0},
+        {t:'Alcool',v: Number.isFinite(day.alcohol)?day.alcohol:0},
+        {t:'Nuit',v: Number.isFinite(day.night)?day.night:0},
       ];
       const row=$('#kpiRow'); row.innerHTML='';
       kpi.forEach(k=>{ const div=document.createElement('div'); div.className='itm'; div.innerHTML=`<div class="muted">${k.t}</div><div style="font-size:20px;font-weight:700">${k.v}</div>`; row.appendChild(div); });
@@ -235,11 +253,12 @@
       const d=store.get(); d.days=d.days||{}; const keys=Object.keys(d.days).sort();
       const tb=$('#recapTable tbody'); tb.innerHTML='';
       keys.forEach(k=>{
-        const day=d.days[k]; const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
+        const day=normalizeDay(d.days[k]);
+        const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
         const urg = day.urinations.length ? (day.urinations.reduce((s,u)=>s+(u.urgency||0),0) / day.urinations.length) : 0;
         const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${k}</td><td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td><td>${day.urinations.length}</td><td>${day.water ?? ''}</td><td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td><td>${urg.toFixed(1)}</td><td>${leaks}</td><td>${day.notes||''}</td>`;
+        tr.innerHTML=`<td>${k}</td><td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td><td>${day.urinations.length}</td><td>${day.water ?? ''}</td><td>${Number.isFinite(day.coffee)?day.coffee:0}</td><td>${Number.isFinite(day.alcohol)?day.alcohol:0}</td><td>${Number.isFinite(day.night)?day.night:0}</td><td>${urg.toFixed(1)}</td><td>${leaks}</td><td>${day.notes||''}</td>`;
         tb.appendChild(tr);
       });
     }
@@ -290,7 +309,8 @@
         toast('Miction ajoutée');
       };
 
-      const inc = (field,msg)=>{ const d=store.get(); const day=ensureDay(todayKey()); day[field]++; store.set(d); refreshKpi(); refreshRecap(); toast(msg); };
+      // --- Incréments robustes (3) ---
+      const inc = (field,msg)=>{ const d=store.get(); const day=ensureDay(todayKey()); day[field] = (Number.isFinite(day[field])?day[field]:0) + 1; store.set(d); refreshKpi(); refreshRecap(); toast(msg); };
       $('#coffeeBtn').onclick=()=>inc('coffee','+1 café');
       $('#alcoholBtn').onclick=()=>inc('alcohol','+1 alcool');
       $('#nightBtn').onclick=()=>inc('night','+1 levée');
@@ -298,7 +318,7 @@
       $('#saveEodBtn').onclick=()=>{
         const d=store.get(); const day=ensureDay(todayKey());
         const w=parseFloat($('#waterInput').value); const notes=$('#notesInput').value.trim();
-        if(!isNaN(w)) day.water=w; else day.water = day.water; // ne change pas si vide
+        if(!isNaN(w)) day.water=w; // si vide, on ne change pas
         if(notes) day.notes=notes;
         day.locked=true; store.set(d);
         refreshKpi(); refreshRecap(); refreshEodLock();
@@ -318,10 +338,10 @@
     function exportCSV(){
       const d=store.get(); const rows=[["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Urgence moy.","Fuites","Notes"]];
       const keys=Object.keys(d.days||{}).sort();
-      keys.forEach(k=>{ const day=d.days[k]; const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
+      keys.forEach(k=>{ const day=normalizeDay(d.days[k]); const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
         const urg = day.urinations.length ? (day.urinations.reduce((s,u)=>s+(u.urgency||0),0) / day.urinations.length) : 0;
         const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
-        rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',day.coffee,day.alcohol,day.night,urg.toFixed(1),leaks,day.notes??'']);
+        rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',(Number.isFinite(day.coffee)?day.coffee:0),(Number.isFinite(day.alcohol)?day.alcohol:0),(Number.isFinite(day.night)?day.night:0),urg.toFixed(1),leaks,day.notes??'']);
       });
       const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
       download(csv,'recap.csv','text/csv');
@@ -348,7 +368,7 @@
       const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
       const keys=Object.keys(d.days||{}).sort();
       keys.forEach(k=>{
-        const day=d.days[k];
+        const day=normalizeDay(d.days[k]);
         day.urinations.forEach(u=>{
           rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']);
         });
