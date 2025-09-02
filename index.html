@@ -20,25 +20,20 @@
     textarea{min-height:90px}
     button{appearance:none;border:0;border-radius:12px;padding:12px 14px;background:#263046;color:var(--text);cursor:pointer}
     button.primary{background:var(--accent);color:white}
-    button.ghost{background:#1b1f2a}
     button.success{background:var(--ok);color:#04110b}
-    button.warn{background:var(--warn);color:#140b04}
-    button.danger{background:var(--bad)}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
     .pill{padding:8px 10px;border-radius:999px;border:1px solid #2c3140;background:#161a24;color:var(--text);font-size:14px;cursor:pointer;text-align:center}
     .pill.active{outline:2px solid var(--accent);}
     .muted{color:var(--muted)}
     .table{width:100%;border-collapse:collapse}
-    .table th,.table td{border-bottom:1px solid #262a36;padding:8px;text-align:left;font-size:14px}
+    .table th,.table td{border-bottom:1px solid #262a36;padding:8px;text-align:left;font-size:14px;white-space:nowrap}
     .kpi{display:flex;gap:10px;flex-wrap:wrap}
     .kpi .itm{flex:1;min-width:120px;background:#10131a;border:1px solid #202433;border-radius:12px;padding:10px}
-    .center{display:flex;justify-content:center;align-items:center}
     .right{display:flex;justify-content:flex-end}
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#11151f;border:1px solid #2a3142;color:#e9ecf5;padding:10px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:all .25s}
     .toast.show{opacity:1;pointer-events:auto;bottom:26px}
     .lock{opacity:.7;pointer-events:none}
-    .hr{height:1px;background:#262a36;margin:10px 0}
     .btns{display:flex;gap:8px;flex-wrap:wrap}
     @media print{body{background:white;color:black}.card,.wrap{background:white;color:black;border:0}.btns,.toast{display:none}}
     .color-dot{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:8px;border:1px solid #333}
@@ -129,7 +124,7 @@
 
       <div class="card">
         <h2>Tableau — Jour</h2>
-        <div class="row btns" style="margin-bottom:8px">
+        <div class="btns" style="margin-bottom:8px">
           <button id="exportDayCsvBtn">Exporter Jour (CSV)</button>
           <button id="exportAllCsvBtn">Exporter toutes les mictions (CSV)</button>
         </div>
@@ -161,10 +156,10 @@
               <th>Eau (L)</th>
               <th>Cafés</th>
               <th>Alcool</th>
-              $1
-              <th>Urgence moy\.<\/th>
-              <th>Fuites<\/th>
-              <th>Notes<\/th>
+              <th>Levées nuit</th>
+              <th>Urgence moy.</th>
+              <th>Fuites</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -241,9 +236,9 @@
       const tb=$('#recapTable tbody'); tb.innerHTML='';
       keys.forEach(k=>{
         const day=d.days[k]; const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
-        const tr=document.createElement('tr');
         const urg = day.urinations.length ? (day.urinations.reduce((s,u)=>s+(u.urgency||0),0) / day.urinations.length) : 0;
         const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
+        const tr=document.createElement('tr');
         tr.innerHTML=`<td>${k}</td><td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td><td>${day.urinations.length}</td><td>${day.water ?? ''}</td><td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td><td>${urg.toFixed(1)}</td><td>${leaks}</td><td>${day.notes||''}</td>`;
         tb.appendChild(tr);
       });
@@ -303,7 +298,8 @@
       $('#saveEodBtn').onclick=()=>{
         const d=store.get(); const day=ensureDay(todayKey());
         const w=parseFloat($('#waterInput').value); const notes=$('#notesInput').value.trim();
-        if(!isNaN(w)) day.water=w; if(notes) day.notes=notes;
+        if(!isNaN(w)) day.water=w; else day.water = day.water; // ne change pas si vide
+        if(notes) day.notes=notes;
         day.locked=true; store.set(d);
         refreshKpi(); refreshRecap(); refreshEodLock();
         toast('Fin de journée enregistrée');
@@ -320,10 +316,12 @@
 
     // ---- Exporters ----
     function exportCSV(){
-      const d=store.get(); const rows=[["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Notes"]];
+      const d=store.get(); const rows=[["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Urgence moy.","Fuites","Notes"]];
       const keys=Object.keys(d.days||{}).sort();
       keys.forEach(k=>{ const day=d.days[k]; const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
-        rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',day.coffee,day.alcohol,day.night,day.notes??'']);
+        const urg = day.urinations.length ? (day.urinations.reduce((s,u)=>s+(u.urgency||0),0) / day.urinations.length) : 0;
+        const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
+        rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',day.coffee,day.alcohol,day.night,urg.toFixed(1),leaks,day.notes??'']);
       });
       const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
       download(csv,'recap.csv','text/csv');
