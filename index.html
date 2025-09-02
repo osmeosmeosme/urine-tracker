@@ -39,14 +39,14 @@
     .toast.show{opacity:1;pointer-events:auto;bottom:26px}
     .lock{opacity:.7;pointer-events:none}
     .hr{height:1px;background:#262a36;margin:10px 0}
-    .foot{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(15,17,21,0),var(--bg) 30%  );padding:18px 14px}
+    .btns{display:flex;gap:8px;flex-wrap:wrap}
+    @media print{body{background:white;color:black}.card,.wrap{background:white;color:black;border:0}.btns,.toast{display:none}}
     .color-dot{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:8px;border:1px solid #333}
     .c0{background:#eef7ff}
     .c1{background:#dff0ff}
     .c2{background:#ffe480}
     .c3{background:#f7c04a}
     .c4{background:#d79a3c}
-    @media print{body{background:white;color:black}.card,.wrap{background:white;color:black;border:0}.foot,.toast{display:none}.btns{display:none}}
   </style>
 </head>
 <body>
@@ -124,11 +124,15 @@
         <div class="right" style="margin-top:12px">
           <button class="success" id="saveEodBtn">Valider fin de journée</button>
         </div>
-        <div class="muted" id="eodLockMsg" style="display:none;margin-top:6px">Saisi pour aujourd’hui verrouillée (déverrouille demain).</div>
+        <div class="muted" id="eodLockMsg" style="display:none;margin-top:6px">Saisie pour aujourd’hui verrouillée (déverrouille demain).</div>
       </div>
 
       <div class="card">
         <h2>Tableau — Jour</h2>
+        <div class="row btns" style="margin-bottom:8px">
+          <button id="exportDayCsvBtn">Exporter Jour (CSV)</button>
+          <button id="exportAllCsvBtn">Exporter toutes les mictions (CSV)</button>
+        </div>
         <table class="table" id="dayTable">
           <thead>
             <tr><th>Heure</th><th>Durée (s)</th><th>Couleur</th><th>Urgence</th><th>Fuite</th></tr>
@@ -139,7 +143,7 @@
 
       <div class="card">
         <h2>Récapitulatif (par jour)</h2>
-        <div class="row btns" style="margin-bottom:8px">
+        <div class="btns" style="margin-bottom:8px">
           <button id="exportCsvBtn">Exporter CSV</button>
           <button id="exportXlsxBtn">Exporter Excel</button>
           <button id="printBtn">Imprimer</button>
@@ -209,7 +213,6 @@
 
     function refreshKpi(){
       const d=store.get(); const key=todayKey(); const day=ensureDay(key);
-      const counts=[0,0,0,0,0]; day.urinations.forEach(u=>{counts[u.color]++;});
       const kpi=[
         {t:'Pipis',v:day.urinations.length},
         {t:'Eau (L)',v: day.water ?? '—'},
@@ -281,7 +284,6 @@
         day.urinations.push({time:timeNow(), duration:dur, color:state.color, urgency:state.urgency, leak:state.leak});
         store.set(d);
         $('#durInput').value=''; // reset
-        // keep hour, reset selections visually by rebuilding with same state
         buildPills($('#colorRow'), ['Très clair','Clair','Jaune','Jaune foncé','Ambré'], state.color, i=>state.color=i);
         buildPills($('#urgRow'), ['0','1','2','3'], state.urgency, i=>state.urgency=i);
         buildPills($('#leakRow'), ['Non','Oui'], state.leak?1:0, i=>state.leak=(i===1));
@@ -306,6 +308,8 @@
       $('#exportCsvBtn').onclick=()=>exportCSV();
       $('#exportXlsxBtn').onclick=()=>exportXLSX();
       $('#printBtn').onclick=()=>window.print();
+      $('#exportDayCsvBtn').onclick=()=>exportDayCSV();
+      $('#exportAllCsvBtn').onclick=()=>exportAllCSV();
     }
 
     const state={ color:2, urgency:0, leak:false };
@@ -321,8 +325,38 @@
       download(csv,'recap.csv','text/csv');
     }
 
-    // Minimal XLSX (CSV with .xlsx is not correct); generate a simple XML-based XLSX is heavy.
-    // For V1, we export CSV (Excel l’ouvre parfaitement). On peut ajouter un vrai XLSX plus tard.
+    function exportDayCSV(){
+      const key=todayKey();
+      const d=store.get();
+      const day=(d.days||{})[key];
+      if(!day || !day.urinations.length){ toast('Aucune donnée pour aujourd\'hui'); return; }
+      const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite"]];
+      const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
+      day.urinations.forEach(u=>{
+        rows.push([key,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']);
+      });
+      const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+      download(csv,`jour-${key}.csv`,'text/csv');
+    }
+
+    // Export de toutes les mictions (tous les jours)
+    function exportAllCSV(){
+      const d=store.get();
+      const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite"]];
+      const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
+      const keys=Object.keys(d.days||{}).sort();
+      keys.forEach(k=>{
+        const day=d.days[k];
+        day.urinations.forEach(u=>{
+          rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']);
+        });
+      });
+      if(rows.length===1){ toast('Aucune miction enregistrée'); return; }
+      const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+      download(csv,'mictions-completes.csv','text/csv');
+    }
+
+    // Minimal XLSX : on reste en CSV (Excel l’ouvre très bien)
     function exportXLSX(){ exportCSV(); toast('Astuce : le fichier CSV s’ouvre dans Excel.'); }
 
     function download(content, filename, type){
