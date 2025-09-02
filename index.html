@@ -161,8 +161,10 @@
               <th>Eau (L)</th>
               <th>Cafés</th>
               <th>Alcool</th>
-              <th>Levées nuit</th>
-              <th>Notes</th>
+              $1
+              <th>Urgence moy\.<\/th>
+              <th>Fuites<\/th>
+              <th>Notes<\/th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -240,7 +242,9 @@
       keys.forEach(k=>{
         const day=d.days[k]; const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${k}</td><td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td><td>${day.urinations.length}</td><td>${day.water ?? ''}</td><td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td><td>${day.notes||''}</td>`;
+        const urg = day.urinations.length ? (day.urinations.reduce((s,u)=>s+(u.urgency||0),0) / day.urinations.length) : 0;
+        const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
+        tr.innerHTML=`<td>${k}</td><td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td><td>${day.urinations.length}</td><td>${day.water ?? ''}</td><td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td><td>${urg.toFixed(1)}</td><td>${leaks}</td><td>${day.notes||''}</td>`;
         tb.appendChild(tr);
       });
     }
