@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analyse urine — suivi perso</title>
+  <meta name="theme-color" content="#111" />
+  <style>
+    :root{--bg:#0f1115;--panel:#171a20;--muted:#8b8f98;--text:#e7e9ee;--accent:#4f8cff;--ok:#38c172;--warn:#f6ad55;--bad:#e53e3e}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:680px;margin:0 auto;padding:16px 16px 80px}
+    h1{font-size:22px;margin:8px 0 16px}
+    h2{font-size:18px;margin:20px 0 10px}
+    .card{background:var(--panel);border:1px solid #232733;border-radius:16px;padding:14px;margin:12px 0}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    label{font-size:14px;color:var(--muted)}
+    input[type="number"],input[type="text"],textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #313543;background:#0f1218;color:var(--text)}
+    textarea{min-height:90px}
+    button{appearance:none;border:0;border-radius:12px;padding:12px 14px;background:#263046;color:var(--text);cursor:pointer}
+    button.primary{background:var(--accent);color:white}
+    button.ghost{background:#1b1f2a}
+    button.success{background:var(--ok);color:#04110b}
+    button.warn{background:var(--warn);color:#140b04}
+    button.danger{background:var(--bad)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .pill{padding:8px 10px;border-radius:999px;border:1px solid #2c3140;background:#161a24;color:var(--text);font-size:14px;cursor:pointer;text-align:center}
+    .pill.active{outline:2px solid var(--accent);}
+    .muted{color:var(--muted)}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{border-bottom:1px solid #262a36;padding:8px;text-align:left;font-size:14px}
+    .kpi{display:flex;gap:10px;flex-wrap:wrap}
+    .kpi .itm{flex:1;min-width:120px;background:#10131a;border:1px solid #202433;border-radius:12px;padding:10px}
+    .center{display:flex;justify-content:center;align-items:center}
+    .right{display:flex;justify-content:flex-end}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#11151f;border:1px solid #2a3142;color:#e9ecf5;padding:10px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:all .25s}
+    .toast.show{opacity:1;pointer-events:auto;bottom:26px}
+    .lock{opacity:.7;pointer-events:none}
+    .hr{height:1px;background:#262a36;margin:10px 0}
+    .foot{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(15,17,21,0),var(--bg) 30%  );padding:18px 14px}
+    .color-dot{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:8px;border:1px solid #333}
+    .c0{background:#eef7ff}
+    .c1{background:#dff0ff}
+    .c2{background:#ffe480}
+    .c3{background:#f7c04a}
+    .c4{background:#d79a3c}
+    @media print{body{background:white;color:black}.card,.wrap{background:white;color:black;border:0}.foot,.toast{display:none}.btns{display:none}}
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <h1>Analyse urine — <span id="todayLabel"></span></h1>
+
+    <!-- AUTH / PIN -->
+    <div id="authCard" class="card" style="display:none">
+      <h2>Accès</h2>
+      <p class="muted" id="authHint"></p>
+      <div class="row">
+        <input id="pinInput" type="password" inputmode="numeric" placeholder="Code PIN (4–6 chiffres)" minlength="4" maxlength="6" />
+        <button class="primary" id="pinBtn"></button>
+      </div>
+      <label><input type="checkbox" id="stayChk" checked> Rester connecté 24 h</label>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dash" style="display:none">
+      <div class="card kpi" id="kpiRow"></div>
+
+      <div class="card">
+        <h2>J’urine</h2>
+        <div class="row">
+          <div>
+            <label>Heure actuelle</label>
+            <div id="nowLabel" style="font-size:20px;font-weight:600"></div>
+          </div>
+        </div>
+        <div class="grid2" style="margin-top:10px">
+          <div>
+            <label>Durée (secondes)</label>
+            <input id="durInput" type="number" min="0" placeholder="ex. 7" />
+          </div>
+          <div>
+            <label>Urgence</label>
+            <div class="row" id="urgRow"></div>
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <label>Couleur</label>
+          <div class="grid3" id="colorRow"></div>
+          <div class="muted" style="margin-top:6px">Nuancier : <span class="color-dot c0"></span>Très clair • <span class="color-dot c1"></span>Clair • <span class="color-dot c2"></span>Jaune • <span class="color-dot c3"></span>Jaune foncé • <span class="color-dot c4"></span>Ambré</div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label>Fuite ?</label>
+          <div class="row" id="leakRow"></div>
+        </div>
+        <div class="right" style="margin-top:12px">
+          <button class="primary" id="addUrineBtn">Valider</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Je bois ou me lève</h2>
+        <div class="grid3">
+          <button id="coffeeBtn">+1 tasse de café</button>
+          <button id="alcoholBtn">+1 verre d’alcool</button>
+          <button id="nightBtn">+1 levée la nuit</button>
+        </div>
+      </div>
+
+      <div class="card" id="eodCard">
+        <h2>Fin de journée</h2>
+        <div class="grid2">
+          <div>
+            <label>Eau bue (L)</label>
+            <input id="waterInput" type="number" step="0.1" min="0" placeholder="ex. 2.3" />
+          </div>
+          <div>
+            <label>Notes</label>
+            <input id="notesInput" type="text" placeholder="ex. stressé, entraînement…" />
+          </div>
+        </div>
+        <div class="right" style="margin-top:12px">
+          <button class="success" id="saveEodBtn">Valider fin de journée</button>
+        </div>
+        <div class="muted" id="eodLockMsg" style="display:none;margin-top:6px">Saisi pour aujourd’hui verrouillée (déverrouille demain).</div>
+      </div>
+
+      <div class="card">
+        <h2>Tableau — Jour</h2>
+        <table class="table" id="dayTable">
+          <thead>
+            <tr><th>Heure</th><th>Durée (s)</th><th>Couleur</th><th>Urgence</th><th>Fuite</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Récapitulatif (par jour)</h2>
+        <div class="row btns" style="margin-bottom:8px">
+          <button id="exportCsvBtn">Exporter CSV</button>
+          <button id="exportXlsxBtn">Exporter Excel</button>
+          <button id="printBtn">Imprimer</button>
+        </div>
+        <table class="table" id="recapTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Très clair</th>
+              <th>Clair</th>
+              <th>Jaune</th>
+              <th>Jaune foncé</th>
+              <th>Ambré</th>
+              <th>Total pipis</th>
+              <th>Eau (L)</th>
+              <th>Cafés</th>
+              <th>Alcool</th>
+              <th>Levées nuit</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Utilities ----
+    const $ = sel => document.querySelector(sel);
+    const todayKey = () => new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Brussels'}); // YYYY-MM-DD
+    const timeNow = () => new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit',hour12:false});
+    const store = {
+      get(){ return JSON.parse(localStorage.getItem('urine-app')||'{}'); },
+      set(d){ localStorage.setItem('urine-app', JSON.stringify(d)); },
+    };
+    const toast = (msg) => { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1800); };
+
+    // ---- Auth (simple PIN local) ----
+    function showAuth(first){
+      $('#authCard').style.display='block';
+      $('#dash').style.display='none';
+      $('#authHint').textContent = first? 'Crée un code PIN (4–6 chiffres). Il restera en mémoire sur ce téléphone.' : 'Entre ton code PIN.';
+      $('#pinBtn').textContent = first? 'Créer le code' : 'Se connecter';
+    }
+    function showDash(){ $('#authCard').style.display='none'; $('#dash').style.display='block'; }
+
+    function saveSession(){ if($('#stayChk').checked){ const exp=Date.now()+24*3600*1000; const d=store.get(); d.session_exp=exp; store.set(d);} }
+
+    function checkSession(){ const d=store.get(); if(d.session_exp && d.session_exp>Date.now()) return true; return false; }
+
+    // ---- Data shape ----
+    function ensureDay(key){ const d=store.get(); d.days=d.days||{}; if(!d.days[key]){ d.days[key]={ urinations:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false }; } store.set(d); return d.days[key]; }
+
+    // ---- UI builders ----
+    function buildPills(container, labels, current, onPick){
+      container.innerHTML='';
+      labels.forEach((lb,i)=>{
+        const b=document.createElement('div'); b.className='pill'+(current===i?' active':''); b.textContent=lb; b.onclick=()=>{ onPick(i); buildPills(container,labels,i,onPick); }; container.appendChild(b);
+      });
+    }
+
+    // ---- Rendering ----
+    function refreshNow(){ $('#nowLabel').textContent=timeNow(); }
+
+    function refreshKpi(){
+      const d=store.get(); const key=todayKey(); const day=ensureDay(key);
+      const counts=[0,0,0,0,0]; day.urinations.forEach(u=>{counts[u.color]++;});
+      const kpi=[
+        {t:'Pipis',v:day.urinations.length},
+        {t:'Eau (L)',v: day.water ?? '—'},
+        {t:'Cafés',v: day.coffee},
+        {t:'Alcool',v: day.alcohol},
+        {t:'Nuit',v: day.night},
+      ];
+      const row=$('#kpiRow'); row.innerHTML='';
+      kpi.forEach(k=>{ const div=document.createElement('div'); div.className='itm'; div.innerHTML=`<div class="muted">${k.t}</div><div style="font-size:20px;font-weight:700">${k.v}</div>`; row.appendChild(div); });
+    }
+
+    function refreshDayTable(){
+      const day=ensureDay(todayKey());
+      const tb=$('#dayTable tbody'); tb.innerHTML='';
+      day.urinations.forEach(u=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${u.time}</td><td>${u.duration??''}</td><td>${['Très clair','Clair','Jaune','Jaune foncé','Ambré'][u.color]}</td><td>${u.urgency}</td><td>${u.leak?'Oui':'Non'}</td>`;
+        tb.appendChild(tr);
+      });
+    }
+
+    function refreshRecap(){
+      const d=store.get(); d.days=d.days||{}; const keys=Object.keys(d.days).sort();
+      const tb=$('#recapTable tbody'); tb.innerHTML='';
+      keys.forEach(k=>{
+        const day=d.days[k]; const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${k}</td><td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td><td>${day.urinations.length}</td><td>${day.water ?? ''}</td><td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td><td>${day.notes||''}</td>`;
+        tb.appendChild(tr);
+      });
+    }
+
+    function refreshEodLock(){
+      const day=ensureDay(todayKey());
+      const locked=day.locked===true;
+      $('#eodCard').classList.toggle('lock', locked);
+      $('#eodLockMsg').style.display = locked? 'block':'none';
+    }
+
+    // ---- Events ----
+    function init(){
+      // Auth init
+      const d=store.get();
+      $('#todayLabel').textContent=new Date().toLocaleDateString('fr-BE',{weekday:'long', day:'2-digit', month:'2-digit', year:'2-digit'});
+      if(checkSession() && d.pin){ showDash(); } else { showAuth(!d.pin); }
+
+      // Pills
+      buildPills($('#urgRow'), ['0','1','2','3'], 0, i=>state.urgency=i);
+      buildPills($('#leakRow'), ['Non','Oui'], 0, i=>state.leak=(i===1));
+      buildPills($('#colorRow'), ['Très clair','Clair','Jaune','Jaune foncé','Ambré'], 2, i=>state.color=i);
+
+      // Clock
+      refreshNow(); setInterval(refreshNow, 30*1000);
+
+      // Render tables
+      refreshKpi(); refreshDayTable(); refreshRecap(); refreshEodLock();
+
+      // Buttons
+      $('#pinBtn').onclick=()=>{
+        const val=$('#pinInput').value.trim(); if(val.length<4||val.length>6){ toast('PIN 4–6 chiffres'); return; }
+        const data=store.get();
+        if(!data.pin){ data.pin=val; store.set(data); saveSession(); showDash(); toast('Code créé'); }
+        else { if(val===data.pin){ saveSession(); showDash(); toast('Connecté'); } else toast('PIN incorrect'); }
+      };
+
+      $('#addUrineBtn').onclick=()=>{
+        const dur=parseInt($('#durInput').value,10); if(isNaN(dur)||dur<0){ toast('Durée invalide'); return; }
+        const key=todayKey(); const d=store.get(); ensureDay(key); const day=d.days[key];
+        day.urinations.push({time:timeNow(), duration:dur, color:state.color, urgency:state.urgency, leak:state.leak});
+        store.set(d);
+        $('#durInput').value=''; // reset
+        // keep hour, reset selections visually by rebuilding with same state
+        buildPills($('#colorRow'), ['Très clair','Clair','Jaune','Jaune foncé','Ambré'], state.color, i=>state.color=i);
+        buildPills($('#urgRow'), ['0','1','2','3'], state.urgency, i=>state.urgency=i);
+        buildPills($('#leakRow'), ['Non','Oui'], state.leak?1:0, i=>state.leak=(i===1));
+        refreshKpi(); refreshDayTable(); refreshRecap();
+        toast('Miction ajoutée');
+      };
+
+      const inc = (field,msg)=>{ const d=store.get(); const day=ensureDay(todayKey()); day[field]++; store.set(d); refreshKpi(); refreshRecap(); toast(msg); };
+      $('#coffeeBtn').onclick=()=>inc('coffee','+1 café');
+      $('#alcoholBtn').onclick=()=>inc('alcohol','+1 alcool');
+      $('#nightBtn').onclick=()=>inc('night','+1 levée');
+
+      $('#saveEodBtn').onclick=()=>{
+        const d=store.get(); const day=ensureDay(todayKey());
+        const w=parseFloat($('#waterInput').value); const notes=$('#notesInput').value.trim();
+        if(!isNaN(w)) day.water=w; if(notes) day.notes=notes;
+        day.locked=true; store.set(d);
+        refreshKpi(); refreshRecap(); refreshEodLock();
+        toast('Fin de journée enregistrée');
+      };
+
+      $('#exportCsvBtn').onclick=()=>exportCSV();
+      $('#exportXlsxBtn').onclick=()=>exportXLSX();
+      $('#printBtn').onclick=()=>window.print();
+    }
+
+    const state={ color:2, urgency:0, leak:false };
+
+    // ---- Exporters ----
+    function exportCSV(){
+      const d=store.get(); const rows=[["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Notes"]];
+      const keys=Object.keys(d.days||{}).sort();
+      keys.forEach(k=>{ const day=d.days[k]; const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
+        rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',day.coffee,day.alcohol,day.night,day.notes??'']);
+      });
+      const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+      download(csv,'recap.csv','text/csv');
+    }
+
+    // Minimal XLSX (CSV with .xlsx is not correct); generate a simple XML-based XLSX is heavy.
+    // For V1, we export CSV (Excel l’ouvre parfaitement). On peut ajouter un vrai XLSX plus tard.
+    function exportXLSX(){ exportCSV(); toast('Astuce : le fichier CSV s’ouvre dans Excel.'); }
+
+    function download(content, filename, type){
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+    }
+
+    // Boot
+    init();
+  </script>
+</body>
+</html>
