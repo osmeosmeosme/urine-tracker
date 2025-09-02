@@ -171,63 +171,46 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    // ---- Utilities ----
+    // ========= Données & helpers (stockage local) =========
     const $ = sel => document.querySelector(sel);
-    const todayKey = () => new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Brussels'}); // YYYY-MM-DD
+    const TZ = 'Europe/Brussels';
+    const todayKey = () => new Date().toLocaleDateString('fr-CA',{timeZone:TZ}); // YYYY-MM-DD
     const timeNow = () => new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit',hour12:false});
+
     const store = {
       get(){ return JSON.parse(localStorage.getItem('urine-app')||'{}'); },
       set(d){ localStorage.setItem('urine-app', JSON.stringify(d)); },
     };
     const toast = (msg) => { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1800); };
 
-    // --- Normalisation des anciennes données (1) ---
+    const BASE_DAY = { urinations:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false };
     function normalizeDay(day){
-      const base={ urinations:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false };
-      const out={...base, ...day};
+      const out = { ...BASE_DAY, ...day };
+      // Sécuriser les nombres
       ['coffee','alcohol','night'].forEach(k=>{ if(!Number.isFinite(out[k])) out[k]=0; });
       if(!Array.isArray(out.urinations)) out.urinations=[];
       if(typeof out.locked!== 'boolean') out.locked=false;
       return out;
     }
+    function getData(){ const d=store.get(); d.days = d.days || {}; return d; }
+    function getDay(d,key){ d.days[key] = normalizeDay(d.days[key]); return d.days[key]; }
+    function ensureDay(d,key){ if(!d.days[key]) d.days[key] = normalizeDay({}); return d.days[key]; }
 
-    // ---- Auth (simple PIN local) ----
+    // ========= Auth (PIN) =========
     function showAuth(first){
-      $('#authCard').style.display='block';
-      $('#dash').style.display='none';
+      $('#authCard').style.display='block'; $('#dash').style.display='none';
       $('#authHint').textContent = first? 'Crée un code PIN (4–6 chiffres). Il restera en mémoire sur ce téléphone.' : 'Entre ton code PIN.';
       $('#pinBtn').textContent = first? 'Créer le code' : 'Se connecter';
     }
     function showDash(){ $('#authCard').style.display='none'; $('#dash').style.display='block'; }
+    function saveSession(){ if($('#stayChk').checked){ const exp=Date.now()+24*3600*1000; const d=getData(); d.session_exp=exp; store.set(d);} }
+    function checkSession(){ const d=store.get(); return !!(d.session_exp && d.session_exp>Date.now() && d.pin); }
 
-    function saveSession(){ if($('#stayChk').checked){ const exp=Date.now()+24*3600*1000; const d=store.get(); d.session_exp=exp; store.set(d);} }
-
-    function checkSession(){ const d=store.get(); if(d.session_exp && d.session_exp>Date.now()) return true; return false; }
-
-    // ---- Data shape ----
-    function ensureDay(key){
-      const d=store.get(); d.days=d.days||{};
-      if(!d.days[key]){
-        d.days[key]={ urinations:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false };
-      } else {
-        d.days[key]=normalizeDay(d.days[key]); // (2) normaliser si ancien format
-      }
-      store.set(d); return d.days[key];
-    }
-
-    // ---- UI builders ----
-    function buildPills(container, labels, current, onPick){
-      container.innerHTML='';
-      labels.forEach((lb,i)=>{
-        const b=document.createElement('div'); b.className='pill'+(current===i?' active':''); b.textContent=lb; b.onclick=()=>{ onPick(i); buildPills(container,labels,i,onPick); }; container.appendChild(b);
-      });
-    }
-
-    // ---- Rendering ----
+    // ========= Rendering =========
     function refreshNow(){ $('#nowLabel').textContent=timeNow(); }
 
     function refreshKpi(){
-      const d=store.get(); const key=todayKey(); const day=ensureDay(key);
+      const d=getData(); const day=getDay(d,todayKey());
       const kpi=[
         {t:'Pipis',v:day.urinations.length},
         {t:'Eau (L)',v: day.water ?? '—'},
@@ -240,7 +223,7 @@
     }
 
     function refreshDayTable(){
-      const day=ensureDay(todayKey());
+      const d=getData(); const day=getDay(d,todayKey());
       const tb=$('#dayTable tbody'); tb.innerHTML='';
       day.urinations.forEach(u=>{
         const tr=document.createElement('tr');
@@ -250,10 +233,11 @@
     }
 
     function refreshRecap(){
-      const d=store.get(); d.days=d.days||{}; const keys=Object.keys(d.days).sort();
+      const d=getData();
+      const keys=Object.keys(d.days).sort();
       const tb=$('#recapTable tbody'); tb.innerHTML='';
       keys.forEach(k=>{
-        const day=normalizeDay(d.days[k]);
+        const day=getDay(d,k);
         const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
         const urg = day.urinations.length ? (day.urinations.reduce((s,u)=>s+(u.urgency||0),0) / day.urinations.length) : 0;
         const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
@@ -264,18 +248,17 @@
     }
 
     function refreshEodLock(){
-      const day=ensureDay(todayKey());
+      const d=getData(); const day=getDay(d,todayKey());
       const locked=day.locked===true;
       $('#eodCard').classList.toggle('lock', locked);
       $('#eodLockMsg').style.display = locked? 'block':'none';
     }
 
-    // ---- Events ----
+    // ========= Init & Events =========
     function init(){
-      // Auth init
       const d=store.get();
       $('#todayLabel').textContent=new Date().toLocaleDateString('fr-BE',{weekday:'long', day:'2-digit', month:'2-digit', year:'2-digit'});
-      if(checkSession() && d.pin){ showDash(); } else { showAuth(!d.pin); }
+      if(checkSession()) showDash(); else showAuth(!d.pin);
 
       // Pills
       buildPills($('#urgRow'), ['0','1','2','3'], 0, i=>state.urgency=i);
@@ -285,46 +268,45 @@
       // Clock
       refreshNow(); setInterval(refreshNow, 30*1000);
 
-      // Render tables
+      // First render
       refreshKpi(); refreshDayTable(); refreshRecap(); refreshEodLock();
 
-      // Buttons
+      // Auth buttons
       $('#pinBtn').onclick=()=>{
         const val=$('#pinInput').value.trim(); if(val.length<4||val.length>6){ toast('PIN 4–6 chiffres'); return; }
-        const data=store.get();
+        const data=getData();
         if(!data.pin){ data.pin=val; store.set(data); saveSession(); showDash(); toast('Code créé'); }
         else { if(val===data.pin){ saveSession(); showDash(); toast('Connecté'); } else toast('PIN incorrect'); }
       };
 
+      // Add urination
       $('#addUrineBtn').onclick=()=>{
         const dur=parseInt($('#durInput').value,10); if(isNaN(dur)||dur<0){ toast('Durée invalide'); return; }
-        const key=todayKey(); const d=store.get(); ensureDay(key); const day=d.days[key];
+        const d=getData(); const day=ensureDay(d,todayKey());
         day.urinations.push({time:timeNow(), duration:dur, color:state.color, urgency:state.urgency, leak:state.leak});
         store.set(d);
-        $('#durInput').value=''; // reset
-        buildPills($('#colorRow'), ['Très clair','Clair','Jaune','Jaune foncé','Ambré'], state.color, i=>state.color=i);
-        buildPills($('#urgRow'), ['0','1','2','3'], state.urgency, i=>state.urgency=i);
-        buildPills($('#leakRow'), ['Non','Oui'], state.leak?1:0, i=>state.leak=(i===1));
+        $('#durInput').value='';
         refreshKpi(); refreshDayTable(); refreshRecap();
         toast('Miction ajoutée');
       };
 
-      // --- Incréments robustes (3) ---
-      const inc = (field,msg)=>{ const d=store.get(); const day=ensureDay(todayKey()); day[field] = (Number.isFinite(day[field])?day[field]:0) + 1; store.set(d); refreshKpi(); refreshRecap(); toast(msg); };
+      // Robust increments (coffee/alcohol/night)
+      const inc = (field,msg)=>{ const d=getData(); const day=ensureDay(d,todayKey()); day[field] = (Number.isFinite(day[field])?day[field]:0) + 1; store.set(d); refreshKpi(); refreshRecap(); toast(msg); };
       $('#coffeeBtn').onclick=()=>inc('coffee','+1 café');
       $('#alcoholBtn').onclick=()=>inc('alcohol','+1 alcool');
       $('#nightBtn').onclick=()=>inc('night','+1 levée');
 
+      // End of day
       $('#saveEodBtn').onclick=()=>{
-        const d=store.get(); const day=ensureDay(todayKey());
+        const d=getData(); const day=ensureDay(d,todayKey());
         const w=parseFloat($('#waterInput').value); const notes=$('#notesInput').value.trim();
-        if(!isNaN(w)) day.water=w; // si vide, on ne change pas
-        if(notes) day.notes=notes;
-        day.locked=true; store.set(d);
+        if(!isNaN(w)) day.water=w; if(notes) day.notes=notes; day.locked=true;
+        store.set(d);
         refreshKpi(); refreshRecap(); refreshEodLock();
         toast('Fin de journée enregistrée');
       };
 
+      // Exports & print
       $('#exportCsvBtn').onclick=()=>exportCSV();
       $('#exportXlsxBtn').onclick=()=>exportXLSX();
       $('#printBtn').onclick=()=>window.print();
@@ -334,11 +316,19 @@
 
     const state={ color:2, urgency:0, leak:false };
 
-    // ---- Exporters ----
+    // ========= UI builders =========
+    function buildPills(container, labels, current, onPick){
+      container.innerHTML='';
+      labels.forEach((lb,i)=>{
+        const b=document.createElement('div'); b.className='pill'+(current===i?' active':''); b.textContent=lb; b.onclick=()=>{ onPick(i); buildPills(container,labels,i,onPick); }; container.appendChild(b);
+      });
+    }
+
+    // ========= Exporters =========
     function exportCSV(){
-      const d=store.get(); const rows=[["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Urgence moy.","Fuites","Notes"]];
-      const keys=Object.keys(d.days||{}).sort();
-      keys.forEach(k=>{ const day=normalizeDay(d.days[k]); const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
+      const d=getData(); const rows=[["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Urgence moy.","Fuites","Notes"]];
+      const keys=Object.keys(d.days).sort();
+      keys.forEach(k=>{ const day=getDay(d,k); const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
         const urg = day.urinations.length ? (day.urinations.reduce((s,u)=>s+(u.urgency||0),0) / day.urinations.length) : 0;
         const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
         rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',(Number.isFinite(day.coffee)?day.coffee:0),(Number.isFinite(day.alcohol)?day.alcohol:0),(Number.isFinite(day.night)?day.night:0),urg.toFixed(1),leaks,day.notes??'']);
@@ -348,44 +338,33 @@
     }
 
     function exportDayCSV(){
-      const key=todayKey();
-      const d=store.get();
-      const day=(d.days||{})[key];
+      const d=getData(); const key=todayKey(); const day=getDay(d,key);
       if(!day || !day.urinations.length){ toast('Aucune donnée pour aujourd\'hui'); return; }
       const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite"]];
       const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
-      day.urinations.forEach(u=>{
-        rows.push([key,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']);
-      });
+      day.urinations.forEach(u=>{ rows.push([key,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']); });
       const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
       download(csv,`jour-${key}.csv`,'text/csv');
     }
 
-    // Export de toutes les mictions (tous les jours)
     function exportAllCSV(){
-      const d=store.get();
+      const d=getData();
       const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite"]];
       const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
-      const keys=Object.keys(d.days||{}).sort();
-      keys.forEach(k=>{
-        const day=normalizeDay(d.days[k]);
-        day.urinations.forEach(u=>{
-          rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']);
-        });
-      });
+      const keys=Object.keys(d.days).sort();
+      keys.forEach(k=>{ const day=getDay(d,k); day.urinations.forEach(u=>{ rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']); }); });
       if(rows.length===1){ toast('Aucune miction enregistrée'); return; }
       const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
       download(csv,'mictions-completes.csv','text/csv');
     }
 
-    // Minimal XLSX : on reste en CSV (Excel l’ouvre très bien)
     function exportXLSX(){ exportCSV(); toast('Astuce : le fichier CSV s’ouvre dans Excel.'); }
 
     function download(content, filename, type){
       const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
     }
 
-    // Boot
+    // ========= Boot =========
     init();
   </script>
 </body>
