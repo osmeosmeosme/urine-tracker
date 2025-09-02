@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#111" />
   <style>
     :root{--bg:#0f1115;--panel:#171a20;--muted:#8b8f98;--text:#e7e9ee;--accent:#4f8cff;--ok:#38c172}
-    body{margin:0;font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;background:var(--bg);color:var(--text)}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:var(--bg);color:var(--text)}
     .wrap{max-width:680px;margin:0 auto;padding:16px}
     h1{font-size:22px;margin:8px 0 16px}
     h2{font-size:18px;margin:20px 0 10px}
@@ -30,6 +30,14 @@
     .toast.show{opacity:1;bottom:26px}
     #errorBanner{background:#e53e3e;color:white;padding:10px;text-align:center;display:none}
     @media print{.btns,.toast,#errorBanner{display:none}}
+
+    /* Petites pastilles rondes de couleur (pour les entêtes du récap) */
+    .dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #333;vertical-align:middle}
+    .d0{background:#ffffff}   /* très clair */
+    .d1{background:#fff4cc}   /* clair */
+    .d2{background:#ffe480}   /* jaune */
+    .d3{background:#f7c04a}   /* jaune foncé */
+    .d4{background:#d79a3c}   /* ambré */
   </style>
 </head>
 <body>
@@ -111,11 +119,11 @@
           <thead>
             <tr>
               <th>Date</th>
-              <th title="Très clair">TC</th>
-              <th title="Clair">C</th>
-              <th title="Jaune">J</th>
-              <th title="Jaune foncé">JF</th>
-              <th title="Ambré">A</th>
+              <th title="Très clair"><span class="dot d0"></span></th>
+              <th title="Clair"><span class="dot d1"></span></th>
+              <th title="Jaune"><span class="dot d2"></span></th>
+              <th title="Jaune foncé"><span class="dot d3"></span></th>
+              <th title="Ambré"><span class="dot d4"></span></th>
               <th title="Total">Σ</th>
               <th title="Eau (L)">💧</th>
               <th title="Cafés">☕</th>
@@ -178,7 +186,7 @@ function refreshRecap(){
       `<td>${shortDate(k)}</td>`+
       `<td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td>`+
       `<td>${day.urinations.length}</td>`+
-      `<td>${day.water??''}</td>`+
+      `<td>${day.water!=null ? day.water + ' L' : ''}</td>`+
       `<td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td>`+
       `<td>${urg.toFixed(1)}</td><td>${leaks}</td><td>${day.notes??''}</td>`;
     tb.appendChild(tr);
