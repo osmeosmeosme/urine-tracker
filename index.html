@@ -6,8 +6,8 @@
   <title>Analyse urine — suivi perso</title>
   <meta name="theme-color" content="#111" />
   <style>
-    :root{--bg:#0f1115;--panel:#171a20;--muted:#8b8f98;--text:#e7e9ee;--accent:#4f8cff;--ok:#38c172;--warn:#f6ad55;--bad:#e53e3e}
-    body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
+    :root{--bg:#0f1115;--panel:#171a20;--muted:#8b8f98;--text:#e7e9ee;--accent:#4f8cff;--ok:#38c172}
+    body{margin:0;font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;background:var(--bg);color:var(--text)}
     .wrap{max-width:680px;margin:0 auto;padding:16px}
     h1{font-size:22px;margin:8px 0 16px}
     h2{font-size:18px;margin:20px 0 10px}
@@ -20,9 +20,10 @@
     button.primary{background:var(--accent);color:white}
     button.success{background:var(--ok);color:black}
     .pill{padding:8px 10px;border-radius:999px;border:1px solid #2c3140;background:#161a24;cursor:pointer}
-    .pill.active{outline:2px solid var(--accent);}
+    .pill.active{outline:2px solid var(--accent)}
     .table{width:100%;border-collapse:collapse}
-    .table th,.table td{border-bottom:1px solid #262a36;padding:6px;text-align:left;font-size:14px}
+    .table th,.table td{border-bottom:1px solid #262a36;padding:8px;text-align:left;font-size:14px;white-space:nowrap}
+    .compact th,.compact td{font-size:12px;padding:6px}
     .kpi{display:flex;gap:10px;flex-wrap:wrap}
     .kpi .itm{flex:1;min-width:120px;background:#10131a;border:1px solid #202433;border-radius:12px;padding:10px}
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#11151f;border:1px solid #2a3142;padding:10px 14px;border-radius:12px;color:white;opacity:0;transition:all .25s}
@@ -99,17 +100,30 @@
 
       <div class="card">
         <h2>Récapitulatif (par jour)</h2>
-        <div class="btns">
+        <div class="btns" style="margin-bottom:8px">
           <button id="exportCsvBtn">Exporter Récap (CSV)</button>
           <button id="exportJsonBtn">Exporter JSON (backup)</button>
           <button id="importJsonBtn">Importer JSON</button>
           <button id="exportBothBtn">Exporter Mictions + Récap</button>
           <input type="file" id="importFile" accept="application/json" style="display:none" />
         </div>
-        <table class="table" id="recapTable">
+        <table class="table compact" id="recapTable">
           <thead>
             <tr>
-              <th>Date</th><th>Total pipis</th><th>Eau (L)</th><th>Cafés</th><th>Alcool</th><th>Nuit</th><th>Urgence moy.</th><th>Fuites</th><th>Notes</th>
+              <th>Date</th>
+              <th title="Très clair">TC</th>
+              <th title="Clair">C</th>
+              <th title="Jaune">J</th>
+              <th title="Jaune foncé">JF</th>
+              <th title="Ambré">A</th>
+              <th title="Total">Σ</th>
+              <th title="Eau (L)">💧</th>
+              <th title="Cafés">☕</th>
+              <th title="Alcool">🍺</th>
+              <th title="Levées nuit">🌙</th>
+              <th title="Urgence moyenne">⚠</th>
+              <th title="Fuites">💦</th>
+              <th title="Notes">📝</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -121,128 +135,143 @@
   <div class="toast" id="toast"></div>
 
 <script>
+/* ---------- Helpers & storage ---------- */
 const $=s=>document.querySelector(s);
 const store={get:()=>JSON.parse(localStorage.getItem('urine-app')||'{}'),set:d=>localStorage.setItem('urine-app',JSON.stringify(d))};
-const todayKey=()=>new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Brussels'});
+const todayKey=()=>new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Brussels'}); // YYYY-MM-DD
 const timeNow=()=>new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'});
 const toast=msg=>{const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)};
 
-function normalizeDay(day){
-  const base={urinations:[],water:null,notes:'',coffee:0,alcohol:0,night:0,locked:false};
-  return {...base,...day};
-}
+const BASE_DAY={urinations:[],water:null,notes:'',coffee:0,alcohol:0,night:0,locked:false};
+function normalizeDay(day){return {...BASE_DAY,...(day||{})}}
 function getData(){const d=store.get();d.days=d.days||{};return d}
-function getDay(d,key){d.days[key]=normalizeDay(d.days[key]||{});return d.days[key]}
+function getDay(d,key){d.days[key]=normalizeDay(d.days[key]);return d.days[key]}
+function shortDate(iso){const [y,m,d]=iso.split('-');return `${d}/${m}/${String(y).slice(2)}`}
 
+/* ---------- KPIs & tables ---------- */
 function refreshKpi(){
-  const d=getData();const day=getDay(d,todayKey());
-  const kpi=[
-    {t:'Pipis',v:day.urinations.length},
-    {t:'Eau (L)',v:day.water??'—'},
-    {t:'Cafés',v:day.coffee},
-    {t:'Alcool',v:day.alcohol},
-    {t:'Nuit',v:day.night}
-  ];
-  const row=$('#kpiRow');row.innerHTML='';
+  const d=getData(), day=getDay(d,todayKey());
+  const kpi=[{t:'Pipis',v:day.urinations.length},{t:'Eau (L)',v:day.water??'—'},{t:'Cafés',v:day.coffee},{t:'Alcool',v:day.alcohol},{t:'Nuit',v:day.night}];
+  const row=$('#kpiRow'); row.innerHTML='';
   kpi.forEach(k=>{const div=document.createElement('div');div.className='itm';div.innerHTML=`<div>${k.t}</div><div style="font-size:20px">${k.v}</div>`;row.appendChild(div)});
 }
 function refreshDayTable(){
-  const d=getData();const day=getDay(d,todayKey());
-  const tb=$('#dayTable tbody');tb.innerHTML='';
+  const d=getData(), day=getDay(d,todayKey());
+  const tb=$('#dayTable tbody'); tb.innerHTML='';
+  const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
   day.urinations.forEach(u=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${u.time}</td><td>${u.duration}</td><td>${['Très clair','Clair','Jaune','Jaune foncé','Ambré'][u.color]}</td><td>${u.urgency}</td><td>${u.leak?'Oui':'Non'}</td>`;
+    tr.innerHTML=`<td>${u.time}</td><td>${u.duration}</td><td>${labels[u.color]}</td><td>${u.urgency}</td><td>${u.leak?'Oui':'Non'}</td>`;
     tb.appendChild(tr);
   });
 }
 function refreshRecap(){
-  const d=getData();const keys=Object.keys(d.days).sort();const tb=$('#recapTable tbody');tb.innerHTML='';
+  const d=getData(); const keys=Object.keys(d.days).sort();
+  const tb=$('#recapTable tbody'); tb.innerHTML='';
   keys.forEach(k=>{
     const day=getDay(d,k);
+    const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
     const urg=day.urinations.length?(day.urinations.reduce((s,u)=>s+(u.urgency||0),0)/day.urinations.length):0;
     const leaks=day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${k}</td><td>${day.urinations.length}</td><td>${day.water??''}</td><td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td><td>${urg.toFixed(1)}</td><td>${leaks}</td><td>${day.notes??''}</td>`;
+    tr.innerHTML=
+      `<td>${shortDate(k)}</td>`+
+      `<td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td>`+
+      `<td>${day.urinations.length}</td>`+
+      `<td>${day.water??''}</td>`+
+      `<td>${day.coffee}</td><td>${day.alcohol}</td><td>${day.night}</td>`+
+      `<td>${urg.toFixed(1)}</td><td>${leaks}</td><td>${day.notes??''}</td>`;
     tb.appendChild(tr);
   });
 }
 
-function addUrine(){
-  const d=getData();const day=getDay(d,todayKey());
-  const dur=parseInt($('#durInput').value,10)||0;
-  day.urinations.push({time:timeNow(),duration:dur,color:state.color,urgency:state.urgency,leak:state.leak});
-  store.set(d);
-  $('#durInput').value='';
-  refreshKpi();refreshDayTable();refreshRecap();
-  toast('Miction ajoutée');
-}
-function inc(field,msg){
-  const d=getData();const day=getDay(d,todayKey());
-  day[field]=(Number.isFinite(day[field])?day[field]:0)+1;
-  store.set(d);refreshKpi();refreshRecap();toast(msg);
-}
-function saveEod(){
-  const d=getData();const day=getDay(d,todayKey());
-  const w=parseFloat($('#waterInput').value);if(!isNaN(w))day.water=w;
-  const notes=$('#notesInput').value;if(notes)day.notes=notes;
-  day.locked=true;store.set(d);
-  refreshKpi();refreshRecap();toast('Fin de journée enregistrée');
-}
-
-function exportCSV(){
-  const d=getData();const rows=[["Date","Total pipis","Eau (L)","Cafés","Alcool","Nuit","Urgence moy.","Fuites","Notes"]];
-  Object.keys(d.days).sort().forEach(k=>{
-    const day=getDay(d,k);
-    const urg=day.urinations.length?(day.urinations.reduce((s,u)=>s+(u.urgency||0),0)/day.urinations.length):0;
-    const leaks=day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
-    rows.push([k,day.urinations.length,day.water??'',day.coffee,day.alcohol,day.night,urg.toFixed(1),leaks,day.notes??'']);
-  });
-  const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
-  download(csv,'recap-complet.csv','text/csv');
-}
-function exportAllCSV(){
-  const d=getData();const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite"]];const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
-  Object.keys(d.days).sort().forEach(k=>{
-    const day=getDay(d,k);
-    day.urinations.forEach(u=>{rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non'])});
-  });
-  const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
-  download(csv,'mictions-completes.csv','text/csv');
-}
-function exportJSON(){const d=getData();const json=JSON.stringify(d,null,2);download(json,'backup-urine.json','application/json')}
-function importJSON(ev){
-  const file=ev.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=()=>{try{const parsed=JSON.parse(reader.result);store.set(parsed);refreshKpi();refreshDayTable();refreshRecap();toast('Import réussi')}catch(e){toast('Import invalide')}};reader.readAsText(file)
-}
-
-function download(content,filename,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=filename;a.click();URL.revokeObjectURL(a.href)}
-
+/* ---------- Actions ---------- */
 const state={color:2,urgency:0,leak:false};
 function buildPills(container,labels,current,onPick){
   container.innerHTML='';
   labels.forEach((lb,i)=>{const b=document.createElement('div');b.className='pill'+(current===i?' active':'');b.textContent=lb;b.onclick=()=>{onPick(i);buildPills(container,labels,i,onPick)};container.appendChild(b)});
 }
+function addUrine(){
+  const d=getData(), day=getDay(d,todayKey());
+  const dur=parseInt($('#durInput').value,10)||0;
+  day.urinations.push({time:timeNow(),duration:dur,color:state.color,urgency:state.urgency,leak:state.leak});
+  store.set(d);
+  $('#durInput').value='';
+  refreshKpi(); refreshDayTable(); refreshRecap();
+  toast('Miction ajoutée');
+}
+function inc(field,msg){
+  const d=getData(), day=getDay(d,todayKey());
+  day[field]=(Number.isFinite(day[field])?day[field]:0)+1;
+  store.set(d); refreshKpi(); refreshRecap(); toast(msg);
+}
+function saveEod(){
+  const d=getData(), day=getDay(d,todayKey());
+  const w=parseFloat($('#waterInput').value); if(!isNaN(w)) day.water=w;
+  const notes=$('#notesInput').value.trim(); if(notes) day.notes=notes;
+  day.locked=true; store.set(d);
+  refreshKpi(); refreshRecap(); toast('Fin de journée enregistrée');
+}
 
+/* ---------- Exports ---------- */
+function exportCSV(){
+  const d=getData();
+  const headers=["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Urgence moy.","Fuites","Notes"];
+  const rows=[headers];
+  const keys=Object.keys(d.days).sort();
+  keys.forEach(k=>{
+    const day=getDay(d,k);
+    const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
+    const urg=day.urinations.length?(day.urinations.reduce((s,u)=>s+(u.urgency||0),0)/day.urinations.length):0;
+    const leaks=day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
+    rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',day.coffee,day.alcohol,day.night,urg.toFixed(1),leaks,day.notes??'']);
+  });
+  const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+  download(csv,'recap-complet.csv','text/csv');
+}
+function exportAllCSV(){
+  const d=getData();
+  const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite"]];
+  const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
+  const keys=Object.keys(d.days).sort();
+  keys.forEach(k=>{
+    const day=getDay(d,k);
+    day.urinations.forEach(u=>{ rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']); });
+  });
+  const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+  download(csv,'mictions-completes.csv','text/csv');
+}
+function exportJSON(){const d=getData();download(JSON.stringify(d,null,2),'backup-urine.json','application/json')}
+function importJSON(ev){
+  const f=ev.target.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{ try{ const parsed=JSON.parse(reader.result); store.set(parsed); refreshKpi(); refreshDayTable(); refreshRecap(); toast('Import JSON ok'); } catch(e){ toast('Import invalide'); } ev.target.value=''; };
+  reader.readAsText(f);
+}
+function download(content,filename,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=filename;a.click();URL.revokeObjectURL(a.href)}
+
+/* ---------- Init ---------- */
 function init(){
   $('#todayLabel').textContent=new Date().toLocaleDateString('fr-BE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
   buildPills($('#urgRow'),['0','1','2','3'],0,i=>state.urgency=i);
   buildPills($('#leakRow'),['Non','Oui'],0,i=>state.leak=(i===1));
   buildPills($('#colorRow'),['Très clair','Clair','Jaune','Jaune foncé','Ambré'],2,i=>state.color=i);
-  refreshKpi();refreshDayTable();refreshRecap();
+  refreshKpi(); refreshDayTable(); refreshRecap();
+
   $('#addUrineBtn').onclick=addUrine;
   $('#coffeeBtn').onclick=()=>inc('coffee','+1 café');
   $('#alcoholBtn').onclick=()=>inc('alcohol','+1 alcool');
   $('#nightBtn').onclick=()=>inc('night','+1 nuit');
   $('#saveEodBtn').onclick=saveEod;
+
   $('#exportCsvBtn').onclick=exportCSV;
   $('#exportAllCsvBtn').onclick=exportAllCSV;
   $('#exportJsonBtn').onclick=exportJSON;
-  $('#importJsonBtn').onclick=()=>$('#importFile').click();  /* ← LIGNE CORRIGÉE */
+  $('#importJsonBtn').onclick=()=>$('#importFile').click();
   $('#importFile').addEventListener('change',importJSON);
-  $('#exportBothBtn').onclick=()=>{exportAllCSV();exportCSV();toast('Exports générés')};
+  $('#exportBothBtn').onclick=()=>{ exportAllCSV(); exportCSV(); toast('Exports générés'); };
 }
-window.addEventListener('error',e=>{$('#errorBanner').style.display='block';$('#errorBanner').textContent='Erreur JS: '+e.message});
+window.addEventListener('error',e=>{const b=$('#errorBanner'); b.style.display='block'; b.textContent='Erreur JS: '+e.message;});
 init();
 </script>
 </body>
