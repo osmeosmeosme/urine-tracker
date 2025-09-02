@@ -139,10 +139,14 @@
       <div class="card">
         <h2>Récapitulatif (par jour)</h2>
         <div class="btns" style="margin-bottom:8px">
-          <button id="exportCsvBtn">Exporter CSV</button>
+          <button id="exportCsvBtn">Exporter Récap (CSV)</button>
           <button id="exportXlsxBtn">Exporter Excel</button>
           <button id="printBtn">Imprimer</button>
+          <button id="exportJsonBtn">Exporter JSON (backup)</button>
+          <button id="importJsonBtn">Importer JSON</button>
+          <button id="exportBothBtn">Exporter Mictions + Récap</button>
         </div>
+        <input type="file" id="importFile" accept="application/json" style="display:none" />
         <table class="table" id="recapTable">
           <thead>
             <tr>
@@ -312,6 +316,10 @@
       $('#printBtn').onclick=()=>window.print();
       $('#exportDayCsvBtn').onclick=()=>exportDayCSV();
       $('#exportAllCsvBtn').onclick=()=>exportAllCSV();
+      $('#exportJsonBtn').onclick=()=>exportJSON();
+      $('#importJsonBtn').onclick=()=>$('#importFile').click();
+      $('#importFile').addEventListener('change', importJSON);
+      $('#exportBothBtn').onclick=()=>{ exportAllCSV(); exportCSV(); toast('Exports complets générés'); };
     }
 
     const state={ color:2, urgency:0, leak:false };
@@ -333,8 +341,9 @@
         const leaks = day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
         rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',(Number.isFinite(day.coffee)?day.coffee:0),(Number.isFinite(day.alcohol)?day.alcohol:0),(Number.isFinite(day.night)?day.night:0),urg.toFixed(1),leaks,day.notes??'']);
       });
-      const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
-      download(csv,'recap.csv','text/csv');
+      const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('
+');
+      download(csv,'recap-complet.csv','text/csv');
     }
 
     function exportDayCSV(){
@@ -354,11 +363,35 @@
       const keys=Object.keys(d.days).sort();
       keys.forEach(k=>{ const day=getDay(d,k); day.urinations.forEach(u=>{ rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']); }); });
       if(rows.length===1){ toast('Aucune miction enregistrée'); return; }
-      const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+      const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('
+');
       download(csv,'mictions-completes.csv','text/csv');
     }
 
     function exportXLSX(){ exportCSV(); toast('Astuce : le fichier CSV s’ouvre dans Excel.'); }
+
+    function exportJSON(){
+      const d=getData();
+      const json = JSON.stringify(d, null, 2);
+      download(json, 'backup-urine.json', 'application/json');
+    }
+
+    function importJSON(ev){
+      const file = ev.target.files && ev.target.files[0];
+      if(!file){ return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const parsed = JSON.parse(reader.result);
+          if(!parsed || typeof parsed !== 'object'){ throw new Error('Fichier invalide'); }
+          store.set(parsed);
+          refreshKpi(); refreshDayTable(); refreshRecap(); refreshEodLock();
+          toast('Import JSON terminé');
+        }catch(e){ toast('Import invalide'); }
+        ev.target.value = '';
+      };
+      reader.readAsText(file);
+    }
 
     function download(content, filename, type){
       const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
