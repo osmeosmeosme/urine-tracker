@@ -14,13 +14,12 @@
     .card{background:var(--panel);border:1px solid #232733;border-radius:16px;padding:14px;margin:12px 0}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .grid1{display:grid;grid-template-columns:1fr;gap:10px}
     .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
     input,button,textarea{padding:10px;border-radius:12px;border:1px solid #313543;background:#0f1218;color:var(--text)}
-    textarea{resize:vertical;min-height:120px}
     button{cursor:pointer}
     button.primary{background:var(--accent);color:white}
     button.success{background:var(--ok);color:black}
+    textarea{resize:vertical;min-height:120px}
     .pill{padding:8px 10px;border-radius:999px;border:1px solid #2c3140;background:#161a24;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
     .pill.active{outline:2px solid var(--accent)}
     .table{width:100%;border-collapse:collapse}
@@ -31,182 +30,201 @@
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#11151f;border:1px solid #2a3142;padding:10px 14px;border-radius:12px;color:white;opacity:0;transition:all .25s}
     .toast.show{opacity:1;bottom:26px}
     #errorBanner{background:#e53e3e;color:white;padding:10px;text-align:center;display:none}
-    @media print{.btns,.toast,#errorBanner{display:none}}
 
     /* Pastilles rondes (couleurs) */
     .dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #333;vertical-align:middle;margin-right:6px}
-    .d0{background:#ffffff}   /* très clair */
-    .d1{background:#fff4cc}   /* clair */
-    .d2{background:#ffe480}   /* jaune */
-    .d3{background:#f7c04a}   /* jaune foncé */
-    .d4{background:#d79a3c}   /* ambré */
+    .d0{background:#ffffff}
+    .d1{background:#fff4cc}
+    .d2{background:#ffe480}
+    .d3{background:#f7c04a}
+    .d4{background:#d79a3c}
 
     /* Fin de journée en colonne (mobile-friendly) */
     #eodCard .grid2{grid-template-columns:1fr}
+
+    @media print{.btns,.toast,#errorBanner{display:none}}
   </style>
 </head>
 <body>
   <div id="errorBanner"></div>
-  <div class="wrap" id="app">
+  <div class="wrap">
     <h1>Analyse urine — <span id="todayLabel"></span></h1>
 
-    <div id="dash">
-      <div class="card kpi" id="kpiRow"></div>
+    <div class="card kpi" id="kpiRow"></div>
 
-      <div class="card">
-        <h2>J’urine</h2>
-        <div class="grid2">
-          <div>
-            <label>Durée (s)</label>
-            <input id="durInput" type="number" min="0" placeholder="ex. 7" />
-          </div>
-          <div>
-            <label>Urgence</label>
-            <div class="row" id="urgRow"></div>
-          </div>
+    <div class="card">
+      <h2>J’urine</h2>
+      <div class="grid2">
+        <div>
+          <label>Durée (s)</label>
+          <input id="durInput" type="number" min="0" placeholder="ex. 7" />
         </div>
-
-        <div class="row" style="margin-top:10px">
-          <label>Retenue</label>
-          <div class="row" id="holdRow"></div>
-        </div>
-
-        <div style="margin-top:10px">
-          <label>Couleur</label>
-          <div class="grid3" id="colorRow"></div>
-        </div>
-
-        <div class="row" style="margin-top:10px">
-          <label>Fuite ?</label>
-          <div class="row" id="leakRow"></div>
-        </div>
-
-        <div class="right" style="margin-top:12px">
-          <button class="primary" id="addUrineBtn">Valider</button>
+        <div>
+          <label>Urgence</label>
+          <div class="row" id="urgRow"></div>
         </div>
       </div>
 
-      <div class="card">
-        <h2>Je bois ou me lève</h2>
-        <div class="grid3">
-          <button id="coffeeBtn">+1 café</button>
-          <button id="alcoholBtn">+1 alcool</button>
-          <button id="nightBtn">+1 nuit</button>
-        </div>
+      <div class="row" style="margin-top:10px">
+        <label>Retenue</label>
+        <div class="row" id="holdRow"></div>
       </div>
 
-      <div class="card" id="eodCard">
-        <h2>Fin de journée</h2>
-        <div class="grid2">
-          <div>
-            <label>Eau bue (L)</label>
-            <input id="waterInput" type="number" step="0.1" min="0" placeholder="ex. 2.3" />
-          </div>
-          <div>
-            <label>Notes</label>
-            <textarea id="notesInput" placeholder="ex. stressé, entraînement…"></textarea>
-          </div>
-        </div>
-        <div class="right" style="margin-top:12px">
-          <button class="success" id="saveEodBtn">Valider fin de journée</button>
-        </div>
+      <div style="margin-top:10px">
+        <label>Couleur</label>
+        <div class="grid3" id="colorRow"></div>
       </div>
 
-      <div class="card">
-        <h2>Tableau — Jour</h2>
-        <div class="btns" style="margin-bottom:8px">
-          <button id="exportTimelineCsvBtn">Exporter chronologie (CSV)</button>
-          <button id="exportAllCsvBtn">Exporter toutes les mictions (CSV)</button>
-        </div>
-        <table class="table" id="dayTable">
-          <thead>
-            <tr>
-              <th title="Événement"></th>
-              <th title="Heure">🕒</th>
-              <th title="Durée (s)">⏱️</th>
-              <th title="Couleur">🎨</th>
-              <th title="Urgence">⚠️</th>
-              <th title="Fuite">💦</th>
-              <th title="Retenue">✋</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="row" style="margin-top:10px">
+        <label>Fuite ?</label>
+        <div class="row" id="leakRow"></div>
       </div>
 
-      <div class="card">
-        <h2>Récapitulatif (par jour)</h2>
-        <div class="btns" style="margin-bottom:8px">
-          <button id="exportCsvBtn">Exporter Récap (CSV)</button>
-          <button id="exportJsonBtn">Exporter JSON (backup)</button>
-          <button id="importJsonBtn">Importer JSON</button>
-          <button id="exportBothBtn">Exporter Mictions + Récap</button>
-          <input type="file" id="importFile" accept="application/json" style="display:none" />
-        </div>
-        <table class="table compact" id="recapTable">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th title="Très clair"><span class="dot d0"></span></th>
-              <th title="Clair"><span class="dot d1"></span></th>
-              <th title="Jaune"><span class="dot d2"></span></th>
-              <th title="Jaune foncé"><span class="dot d3"></span></th>
-              <th title="Ambré"><span class="dot d4"></span></th>
-              <th title="Total">Σ</th>
-              <th title="Eau (L)">💧</th>
-              <th title="Cafés">☕</th>
-              <th title="Alcool">🍺</th>
-              <th title="Levées nuit">🌙</th>
-              <th title="Urgence moyenne">⚠</th>
-              <th title="Fuites">💦</th>
-              <th title="Notes">📝</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="row" style="margin-top:12px;justify-content:flex-end">
+        <button class="primary" id="addUrineBtn">Valider</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Je bois ou me lève</h2>
+      <div class="grid3">
+        <button id="coffeeBtn">+1 café</button>
+        <button id="alcoholBtn">+1 alcool</button>
+        <button id="nightBtn">+1 nuit</button>
+      </div>
+    </div>
+
+    <div class="card" id="eodCard">
+      <h2>Fin de journée</h2>
+      <div class="grid2">
+        <div>
+          <label>Eau bue (L)</label>
+          <input id="waterInput" type="number" step="0.1" min="0" placeholder="ex. 2.3" />
+        </div>
+        <div>
+          <label>Notes</label>
+          <textarea id="notesInput" placeholder="ex. stressé, entraînement…"></textarea>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;justify-content:flex-end">
+        <button class="success" id="saveEodBtn">Valider fin de journée</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Tableau — Jour</h2>
+      <div class="btns" style="margin-bottom:8px">
+        <button id="exportTimelineCsvBtn">Exporter chronologie (CSV)</button>
+        <button id="exportAllCsvBtn">Exporter toutes les mictions (CSV)</button>
+      </div>
+      <table class="table" id="dayTable">
+        <thead>
+          <tr>
+            <th title="Événement"></th>
+            <th title="Heure">🕒</th>
+            <th title="Durée (s)">⏱️</th>
+            <th title="Couleur">🎨</th>
+            <th title="Urgence">⚠️</th>
+            <th title="Fuite">💦</th>
+            <th title="Retenue">✋</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Récapitulatif (par jour)</h2>
+      <div class="btns" style="margin-bottom:8px">
+        <button id="exportCsvBtn">Exporter Récap (CSV)</button>
+        <button id="exportJsonBtn">Exporter JSON (backup)</button>
+        <button id="importJsonBtn">Importer JSON</button>
+        <button id="exportBothBtn">Exporter Mictions + Récap</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none" />
+      </div>
+      <table class="table compact" id="recapTable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th title="Très clair"><span class="dot d0"></span></th>
+            <th title="Clair"><span class="dot d1"></span></th>
+            <th title="Jaune"><span class="dot d2"></span></th>
+            <th title="Jaune foncé"><span class="dot d3"></span></th>
+            <th title="Ambré"><span class="dot d4"></span></th>
+            <th title="Total">Σ</th>
+            <th title="Eau (L)">💧</th>
+            <th title="Cafés">☕</th>
+            <th title="Alcool">🍺</th>
+            <th title="Levées nuit">🌙</th>
+            <th title="Urgence moyenne">⚠</th>
+            <th title="Fuites">💦</th>
+            <th title="Notes">📝</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
 <script>
-/* ---------- Helpers & storage ---------- */
-const $=s=>document.querySelector(s);
-const store={get:()=>JSON.parse(localStorage.getItem('urine-app')||'{}'),set:d=>localStorage.setItem('urine-app',JSON.stringify(d))};
-const todayKey=()=>new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Brussels'}); // YYYY-MM-DD
-const timeNow=()=>new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'});
-const toast=msg=>{const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)};
+/* ===== Helpers & storage ===== */
+const $ = s => document.querySelector(s);
+const store = {
+  get: () => JSON.parse(localStorage.getItem('urine-app') || '{}'),
+  set: d => localStorage.setItem('urine-app', JSON.stringify(d)),
+};
+const todayKey = () => new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Brussels'}); // YYYY-MM-DD
+const timeNow  = () => new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'});
+const toast = msg => { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); };
 
-const BASE_DAY={urinations:[],timeline:[],water:null,notes:'',coffee:0,alcohol:0,night:0,locked:false};
-function normalizeDay(day){
-  const d={...BASE_DAY,...(day||{})};
-  if(!Array.isArray(d.urinations)) d.urinations=[];
-  if(!Array.isArray(d.timeline)) d.timeline=[];
-  ['coffee','alcohol','night'].forEach(k=>{ if(!Number.isFinite(d[k])) d[k]=0; });
-  if(typeof d.locked!=='boolean') d.locked=false;
-  return d;
+const BASE_DAY = { urinations:[], timeline:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false };
+const COLOR_LABELS = ['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
+function normalizeDay(day){ const d={...BASE_DAY,...(day||{})}; if(!Array.isArray(d.urinations)) d.urinations=[]; if(!Array.isArray(d.timeline)) d.timeline=[]; ['coffee','alcohol','night'].forEach(k=>{if(!Number.isFinite(d[k])) d[k]=0;}); if(typeof d.locked!=='boolean') d.locked=false; return d; }
+function getData(){ const d=store.get(); d.days=d.days||{}; return d; }
+function getDay(d,key){ d.days[key]=normalizeDay(d.days[key]); return d.days[key]; }
+function shortDate(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${String(y).slice(2)}`; }
+
+/* ===== State ===== */
+const state = { color:2, urgency:0, leak:false, hold:false };
+
+/* ===== UI builders ===== */
+function buildPills(container, items, current, onPick){
+  container.innerHTML='';
+  items.forEach((item,i)=>{
+    const b=document.createElement('div');
+    b.className='pill'+(current===i?' active':'');
+    if(typeof item==='string'){ b.textContent=item; }
+    else{ b.innerHTML=item.html; b.title=item.title||''; }
+    b.onclick=()=>{ onPick(i); buildPills(container, items, i, onPick); };
+    container.appendChild(b);
+  });
 }
-function getData(){const d=store.get();d.days=d.days||{};return d}
-function getDay(d,key){d.days[key]=normalizeDay(d.days[key]);return d.days[key]}
-function shortDate(iso){const [y,m,d]=iso.split('-');return `${d}/${m}/${String(y).slice(2)}`}
-const COLOR_LABELS=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
+function buildColorPills(){
+  const items=[
+    {html:'<span class="dot d0"></span>', title:'Très clair'},
+    {html:'<span class="dot d1"></span>', title:'Clair'},
+    {html:'<span class="dot d2"></span>', title:'Jaune'},
+    {html:'<span class="dot d3"></span>', title:'Jaune foncé'},
+    {html:'<span class="dot d4"></span>', title:'Ambré'},
+  ];
+  buildPills($('#colorRow'), items, state.color, i=>state.color=i);
+}
 
-/* ---------- KPIs & tables ---------- */
+/* ===== Render ===== */
 function refreshKpi(){
   const d=getData(), day=getDay(d,todayKey());
   const kpi=[{t:'Pipis',v:day.urinations.length},{t:'Eau (L)',v:day.water??'—'},{t:'Cafés',v:day.coffee},{t:'Alcool',v:day.alcohol},{t:'Nuit',v:day.night}];
   const row=$('#kpiRow'); row.innerHTML='';
-  kpi.forEach(k=>{const div=document.createElement('div');div.className='itm';div.innerHTML=`<div>${k.t}</div><div style="font-size:20px">${k.v}</div>`;row.appendChild(div)});
+  kpi.forEach(k=>{const div=document.createElement('div');div.className='itm';div.innerHTML=`<div>${k.t}</div><div style="font-size:20px">${k.v}</div>`;row.appendChild(div);});
 }
 function refreshDayTable(){
   const d=getData(), day=getDay(d,todayKey());
   const tb=$('#dayTable tbody'); tb.innerHTML='';
-  // Timeline : si vide (anciens jours), reconstruire à partir des mictions
-  let timeline = day.timeline && day.timeline.length ? day.timeline.slice() : day.urinations.map(u=>({type:'miction', ...u}));
-  // Trier par heure HH:mm
-  timeline.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
-  timeline.forEach(ev=>{
+  let tl = day.timeline && day.timeline.length ? day.timeline.slice() : day.urinations.map(u=>({type:'miction', ...u}));
+  tl.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
+  tl.forEach(ev=>{
     const tr=document.createElement('tr');
     if(ev.type==='miction'){
       tr.innerHTML=`<td title="Miction">🌊</td><td>${ev.time}</td><td>${ev.duration??''}</td><td><span class="dot d${ev.color}"></span>${COLOR_LABELS[ev.color]}</td><td>${ev.urgency}</td><td>${ev.leak?'Oui':'Non'}</td><td>${ev.hold?'Oui':'Non'}</td>`;
@@ -219,15 +237,14 @@ function refreshDayTable(){
   });
 }
 function refreshRecap(){
-  const d=getData(); const keys=Object.keys(d.days).sort();
-  const tb=$('#recapTable tbody'); tb.innerHTML='';
+  const d=getData(); const keys=Object.keys(d.days).sort(); const tb=$('#recapTable tbody'); tb.innerHTML='';
   keys.forEach(k=>{
     const day=getDay(d,k);
     const counts=[0,0,0,0,0]; day.urinations.forEach(u=>counts[u.color]++);
     const urg=day.urinations.length?(day.urinations.reduce((s,u)=>s+(u.urgency||0),0)/day.urinations.length):0;
     const leaks=day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
     const tr=document.createElement('tr');
-    tr.innerHTML=
+    tr.innerHTML =
       `<td>${shortDate(k)}</td>`+
       `<td>${counts[0]}</td><td>${counts[1]}</td><td>${counts[2]}</td><td>${counts[3]}</td><td>${counts[4]}</td>`+
       `<td>${day.urinations.length}</td>`+
@@ -238,28 +255,7 @@ function refreshRecap(){
   });
 }
 
-/* ---------- Actions ---------- */
-const state={color:2,urgency:0,leak:false,hold:false};
-function buildPills(container,items,current,onPick){
-  container.innerHTML='';
-  items.forEach((item,i)=>{
-    const b=document.createElement('div'); b.className='pill'+(current===i?' active':'');
-    if(typeof item==='string'){ b.textContent=item; }
-    else { b.innerHTML=item.html; b.title=item.title||''; }
-    b.onclick=()=>{ onPick(i); buildPills(container,items,i,onPick); };
-    container.appendChild(b);
-  });
-}
-function buildColorPills(){
-  const items=[
-    {html:'<span class="dot d0"></span>', title:'Très clair'},
-    {html:'<span class="dot d1"></span>', title:'Clair'},
-    {html:'<span class="dot d2"></span>', title:'Jaune'},
-    {html:'<span class="dot d3"></span>', title:'Jaune foncé'},
-    {html:'<span class="dot d4"></span>', title:'Ambré'},
-  ];
-  buildPills($('#colorRow'), items, state.color, i=>state.color=i);
-}
+/* ===== Actions ===== */
 function addUrine(){
   const d=getData(), day=getDay(d,todayKey());
   const dur=parseInt($('#durInput').value,10)||0;
@@ -277,25 +273,24 @@ function inc(field,msg){
   const now=timeNow();
   if(field==='coffee') day.timeline.push({type:'coffee', time:now});
   if(field==='alcohol') day.timeline.push({type:'alcohol', time:now});
-  store.set(d); refreshKpi(); refreshDayTable(); refreshRecap(); toast(msg);
+  store.set(d);
+  refreshKpi(); refreshDayTable(); refreshRecap();
+  toast(msg);
 }
 function saveEod(){
   const d=getData(), day=getDay(d,todayKey());
   const w=parseFloat($('#waterInput').value); if(!isNaN(w)) day.water=w;
   const notes=$('#notesInput').value.trim(); if(notes) day.notes=notes;
   day.locked=true; store.set(d);
-  refreshKpi(); refreshDayTable(); refreshRecap(); toast('Fin de journée enregistrée');
+  refreshKpi(); refreshDayTable(); refreshRecap();
+  toast('Fin de journée enregistrée');
 }
 
-/* ---------- Exports ---------- */
+/* ===== Exports ===== */
 function exportCSV(){
-  const d=getData();
-  const headers=["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Urgence moy.","Fuites","Notes"];
-  const rows=[headers];
-  const keys=Object.keys(d.days).sort();
-  keys.forEach(k=>{
-    const day=getDay(d,k);
-    const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
+  const d=getData(); const rows=[["Date","Très clair","Clair","Jaune","Jaune foncé","Ambré","Nombre pipis total","Eau (L)","Nombre tasses de café","Nombre verres alcool","Nombre de fois levé la nuit","Urgence moy.","Fuites","Notes"]];
+  Object.keys(d.days).sort().forEach(k=>{
+    const day=getDay(d,k); const c=[0,0,0,0,0]; day.urinations.forEach(u=>c[u.color]++);
     const urg=day.urinations.length?(day.urinations.reduce((s,u)=>s+(u.urgency||0),0)/day.urinations.length):0;
     const leaks=day.urinations.reduce((s,u)=>s+(u.leak?1:0),0);
     rows.push([k,c[0],c[1],c[2],c[3],c[4],day.urinations.length,day.water??'',day.coffee,day.alcohol,day.night,urg.toFixed(1),leaks,day.notes??'']);
@@ -304,74 +299,41 @@ function exportCSV(){
   download(csv,'recap-complet.csv','text/csv');
 }
 function exportAllCSV(){
-  const d=getData();
-  const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
-  const keys=Object.keys(d.days).sort();
-  keys.forEach(k=>{
+  const d=getData(); const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
+  Object.keys(d.days).sort().forEach(k=>{
     const day=getDay(d,k);
-    day.urinations.forEach(u=>{
-      rows.push([k,u.time,u.duration,COLOR_LABELS[u.color],u.urgency,u.leak?'Oui':'Non',u.hold?'Oui':'Non']);
-    });
+    day.urinations.forEach(u=>rows.push([k,u.time,u.duration,COLOR_LABELS[u.color],u.urgency,u.leak?'Oui':'Non',u.hold?'Oui':'Non']));
   });
   const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
   download(csv,'mictions-completes.csv','text/csv');
 }
 function exportTimelineCSV(){
-  const d=getData();
-  const rows=[["Date","Heure","Événement","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
-  const keys=Object.keys(d.days).sort();
-  keys.forEach(k=>{
-    const day=getDay(d,k);
-    let tl = day.timeline && day.timeline.length ? day.timeline.slice() : day.urinations.map(u=>({type:'miction', ...u}));
+  const d=getData(); const rows=[["Date","Heure","Événement","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
+  Object.keys(d.days).sort().forEach(k=>{
+    const day=getDay(d,k); let tl = day.timeline && day.timeline.length ? day.timeline.slice() : day.urinations.map(u=>({type:'miction', ...u}));
     tl.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
     tl.forEach(ev=>{
-      if(ev.type==='miction'){
-        rows.push([k,ev.time,'Miction',ev.duration,COLOR_LABELS[ev.color],ev.urgency,ev.leak?'Oui':'Non',ev.hold?'Oui':'Non']);
-      }else if(ev.type==='coffee'){
-        rows.push([k,ev.time,'Café','','','','','']);
-      }else if(ev.type==='alcohol'){
-        rows.push([k,ev.time,'Alcool','','','','','']);
-      }
+      if(ev.type==='miction') rows.push([k,ev.time,'Miction',ev.duration,COLOR_LABELS[ev.color],ev.urgency,ev.leak?'Oui':'Non',ev.hold?'Oui':'Non']);
+      else if(ev.type==='coffee') rows.push([k,ev.time,'Café','','','','','']);
+      else if(ev.type==='alcohol') rows.push([k,ev.time,'Alcool','','','','','']);
     });
   });
   const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
   download(csv,'chronologie-jour.csv','text/csv');
 }
-function exportJSON(){const d=getData();download(JSON.stringify(d,null,2),'backup-urine.json','application/json')}
+function exportJSON(){ const d=getData(); download(JSON.stringify(d,null,2),'backup-urine.json','application/json'); }
 function importJSON(ev){
   const f=ev.target.files[0]; if(!f) return;
-  const reader=new FileReader();
-  reader.onload=()=>{ try{ const parsed=JSON.parse(reader.result); store.set(parsed); refreshKpi(); refreshDayTable(); refreshRecap(); toast('Import JSON ok'); } catch(e){ toast('Import invalide'); } ev.target.value=''; };
-  reader.readAsText(f);
+  const rd=new FileReader();
+  rd.onload=()=>{ try{ const parsed=JSON.parse(rd.result); store.set(parsed); refreshKpi(); refreshDayTable(); refreshRecap(); toast('Import JSON ok'); } catch(e){ toast('Import invalide'); } ev.target.value=''; };
+  rd.readAsText(f);
 }
-function download(content,filename,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=filename;a.click();URL.revokeObjectURL(a.href)}
+function download(content,filename,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=filename; a.click(); URL.revokeObjectURL(a.href); }
 
-/* ---------- Init ---------- */
-function buildColorPills(){
-  const items=[
-    {html:'<span class="dot d0"></span>', title:'Très clair'},
-    {html:'<span class="dot d1"></span>', title:'Clair'},
-    {html:'<span class="dot d2"></span>', title:'Jaune'},
-    {html:'<span class="dot d3"></span>', title:'Jaune foncé'},
-    {html:'<span class="dot d4"></span>', title:'Ambré'},
-  ];
-  buildPills($('#colorRow'), items, state.color, i=>state.color=i);
-}
-const state={color:2,urgency:0,leak:false,hold:false};
-function buildPills(container,items,current,onPick){
-  container.innerHTML='';
-  items.forEach((item,i)=>{
-    const b=document.createElement('div'); b.className='pill'+(current===i?' active':'');
-    if(typeof item==='string'){ b.textContent=item; }
-    else { b.innerHTML=item.html; b.title=item.title||''; }
-    b.onclick=()=>{ onPick(i); buildPills(container,items,i,onPick); };
-    container.appendChild(b);
-  });
-}
+/* ===== Init ===== */
 function init(){
   $('#todayLabel').textContent=new Date().toLocaleDateString('fr-BE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
 
-  // Pastilles/choix
   buildPills($('#urgRow'), ['0','1','2','3'], 0, i=>state.urgency=i);
   buildPills($('#holdRow'), ['Non','Oui'], 0, i=>state.hold=(i===1));
   buildPills($('#leakRow'), ['Non','Oui'], 0, i=>state.leak=(i===1));
@@ -379,52 +341,21 @@ function init(){
 
   refreshKpi(); refreshDayTable(); refreshRecap();
 
-  // Actions
-  $('#addUrineBtn').onclick=addUrine;
-  $('#coffeeBtn').onclick=()=>inc('coffee','+1 café');
-  $('#alcoholBtn').onclick=()=>inc('alcohol','+1 alcool');
-  $('#nightBtn').onclick=()=>inc('night','+1 nuit');
-  $('#saveEodBtn').onclick=saveEod;
+  $('#addUrineBtn').onclick = addUrine;
+  $('#coffeeBtn').onclick  = () => inc('coffee','+1 café');
+  $('#alcoholBtn').onclick = () => inc('alcohol','+1 alcool');
+  $('#nightBtn').onclick   = () => inc('night','+1 nuit');
+  $('#saveEodBtn').onclick = saveEod;
 
-  // Exports
-  $('#exportTimelineCsvBtn').onclick=exportTimelineCSV;
-  $('#exportAllCsvBtn').onclick=exportAllCSV;
-  $('#exportCsvBtn').onclick=exportCSV;
-  $('#exportJsonBtn').onclick=exportJSON;
-  $('#importJsonBtn').onclick=()=>$('#importFile').click();
-  $('#importFile').addEventListener('change',importJSON);
-  $('#exportBothBtn').onclick=()=>{ exportAllCSV(); exportCSV(); toast('Exports générés'); };
+  $('#exportTimelineCsvBtn').onclick = exportTimelineCSV;
+  $('#exportAllCsvBtn').onclick      = exportAllCSV;
+  $('#exportCsvBtn').onclick         = exportCSV;
+  $('#exportJsonBtn').onclick        = exportJSON;
+  $('#importJsonBtn').onclick        = () => $('#importFile').click();
+  $('#importFile').addEventListener('change', importJSON);
+  $('#exportBothBtn').onclick        = () => { exportAllCSV(); exportCSV(); toast('Exports générés'); };
 }
-window.addEventListener('error',e=>{const b=$('#errorBanner'); b.style.display='block'; b.textContent='Erreur JS: '+e.message;});
-
-/* Actions logic */
-function addUrine(){
-  const d=getData(), day=getDay(d,todayKey());
-  const dur=parseInt($('#durInput').value,10)||0;
-  const ev={time:timeNow(),duration:dur,color:state.color,urgency:state.urgency,leak:state.leak,hold:state.hold};
-  day.urinations.push(ev);
-  day.timeline.push({type:'miction', ...ev});
-  store.set(d);
-  $('#durInput').value='';
-  refreshKpi(); refreshDayTable(); refreshRecap();
-  toast('Miction ajoutée');
-}
-function inc(field,msg){
-  const d=getData(), day=getDay(d,todayKey());
-  day[field]=(Number.isFinite(day[field])?day[field]:0)+1;
-  const now=timeNow();
-  if(field==='coffee') day.timeline.push({type:'coffee', time:now});
-  if(field==='alcohol') day.timeline.push({type:'alcohol', time:now});
-  store.set(d); refreshKpi(); refreshDayTable(); refreshRecap(); toast(msg);
-}
-function saveEod(){
-  const d=getData(), day=getDay(d,todayKey());
-  const w=parseFloat($('#waterInput').value); if(!isNaN(w)) day.water=w;
-  const notes=$('#notesInput').value.trim(); if(notes) day.notes=notes;
-  day.locked=true; store.set(d);
-  refreshKpi(); refreshDayTable(); refreshRecap(); toast('Fin de journée enregistrée');
-}
-
+window.addEventListener('error',e=>{ const b=$('#errorBanner'); b.style.display='block'; b.textContent='Erreur JS : '+e.message; });
 init();
 </script>
 </body>
