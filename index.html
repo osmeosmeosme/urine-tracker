@@ -14,8 +14,10 @@
     .card{background:var(--panel);border:1px solid #232733;border-radius:16px;padding:14px;margin:12px 0}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .grid1{display:grid;grid-template-columns:1fr;gap:10px}
     .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-    input,button{padding:10px;border-radius:12px;border:1px solid #313543;background:#0f1218;color:var(--text)}
+    input,button,textarea{padding:10px;border-radius:12px;border:1px solid #313543;background:#0f1218;color:var(--text)}
+    textarea{resize:vertical;min-height:120px}
     button{cursor:pointer}
     button.primary{background:var(--accent);color:white}
     button.success{background:var(--ok);color:black}
@@ -32,12 +34,15 @@
     @media print{.btns,.toast,#errorBanner{display:none}}
 
     /* Pastilles rondes (couleurs) */
-    .dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #333;vertical-align:middle}
+    .dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #333;vertical-align:middle;margin-right:6px}
     .d0{background:#ffffff}   /* très clair */
     .d1{background:#fff4cc}   /* clair */
     .d2{background:#ffe480}   /* jaune */
     .d3{background:#f7c04a}   /* jaune foncé */
     .d4{background:#d79a3c}   /* ambré */
+
+    /* Fin de journée en colonne (mobile-friendly) */
+    #eodCard .grid2{grid-template-columns:1fr}
   </style>
 </head>
 <body>
@@ -93,8 +98,14 @@
       <div class="card" id="eodCard">
         <h2>Fin de journée</h2>
         <div class="grid2">
-          <input id="waterInput" type="number" step="0.1" min="0" placeholder="Eau bue (L)" />
-          <input id="notesInput" type="text" placeholder="Notes" />
+          <div>
+            <label>Eau bue (L)</label>
+            <input id="waterInput" type="number" step="0.1" min="0" placeholder="ex. 2.3" />
+          </div>
+          <div>
+            <label>Notes</label>
+            <textarea id="notesInput" placeholder="ex. stressé, entraînement…"></textarea>
+          </div>
         </div>
         <div class="right" style="margin-top:12px">
           <button class="success" id="saveEodBtn">Valider fin de journée</button>
@@ -110,7 +121,13 @@
         <table class="table" id="dayTable">
           <thead>
             <tr>
-              <th>Événement</th><th>Heure</th><th>Durée (s)</th><th>Couleur</th><th>Urgence</th><th>Fuite</th><th>Retenue</th>
+              <th title="Événement"></th>
+              <th title="Heure">🕒</th>
+              <th title="Durée (s)">⏱️</th>
+              <th title="Couleur">🎨</th>
+              <th title="Urgence">⚠️</th>
+              <th title="Fuite">💦</th>
+              <th title="Retenue">✋</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -192,11 +209,11 @@ function refreshDayTable(){
   timeline.forEach(ev=>{
     const tr=document.createElement('tr');
     if(ev.type==='miction'){
-      tr.innerHTML=`<td>💧 Miction</td><td>${ev.time}</td><td>${ev.duration??''}</td><td>${COLOR_LABELS[ev.color]}</td><td>${ev.urgency}</td><td>${ev.leak?'Oui':'Non'}</td><td>${ev.hold?'Oui':'Non'}</td>`;
+      tr.innerHTML=`<td title="Miction">🌊</td><td>${ev.time}</td><td>${ev.duration??''}</td><td><span class="dot d${ev.color}"></span>${COLOR_LABELS[ev.color]}</td><td>${ev.urgency}</td><td>${ev.leak?'Oui':'Non'}</td><td>${ev.hold?'Oui':'Non'}</td>`;
     }else if(ev.type==='coffee'){
-      tr.innerHTML=`<td>☕ Café</td><td>${ev.time}</td><td></td><td></td><td></td><td></td><td></td>`;
+      tr.innerHTML=`<td title="Café">☕</td><td>${ev.time}</td><td></td><td></td><td></td><td></td><td></td>`;
     }else if(ev.type==='alcohol'){
-      tr.innerHTML=`<td>🍺 Alcool</td><td>${ev.time}</td><td></td><td></td><td></td><td></td><td></td>`;
+      tr.innerHTML=`<td title="Alcool">🍺</td><td>${ev.time}</td><td></td><td></td><td></td><td></td><td></td>`;
     }
     tb.appendChild(tr);
   });
@@ -330,6 +347,27 @@ function importJSON(ev){
 function download(content,filename,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=filename;a.click();URL.revokeObjectURL(a.href)}
 
 /* ---------- Init ---------- */
+function buildColorPills(){
+  const items=[
+    {html:'<span class="dot d0"></span>', title:'Très clair'},
+    {html:'<span class="dot d1"></span>', title:'Clair'},
+    {html:'<span class="dot d2"></span>', title:'Jaune'},
+    {html:'<span class="dot d3"></span>', title:'Jaune foncé'},
+    {html:'<span class="dot d4"></span>', title:'Ambré'},
+  ];
+  buildPills($('#colorRow'), items, state.color, i=>state.color=i);
+}
+const state={color:2,urgency:0,leak:false,hold:false};
+function buildPills(container,items,current,onPick){
+  container.innerHTML='';
+  items.forEach((item,i)=>{
+    const b=document.createElement('div'); b.className='pill'+(current===i?' active':'');
+    if(typeof item==='string'){ b.textContent=item; }
+    else { b.innerHTML=item.html; b.title=item.title||''; }
+    b.onclick=()=>{ onPick(i); buildPills(container,items,i,onPick); };
+    container.appendChild(b);
+  });
+}
 function init(){
   $('#todayLabel').textContent=new Date().toLocaleDateString('fr-BE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
 
@@ -358,6 +396,35 @@ function init(){
   $('#exportBothBtn').onclick=()=>{ exportAllCSV(); exportCSV(); toast('Exports générés'); };
 }
 window.addEventListener('error',e=>{const b=$('#errorBanner'); b.style.display='block'; b.textContent='Erreur JS: '+e.message;});
+
+/* Actions logic */
+function addUrine(){
+  const d=getData(), day=getDay(d,todayKey());
+  const dur=parseInt($('#durInput').value,10)||0;
+  const ev={time:timeNow(),duration:dur,color:state.color,urgency:state.urgency,leak:state.leak,hold:state.hold};
+  day.urinations.push(ev);
+  day.timeline.push({type:'miction', ...ev});
+  store.set(d);
+  $('#durInput').value='';
+  refreshKpi(); refreshDayTable(); refreshRecap();
+  toast('Miction ajoutée');
+}
+function inc(field,msg){
+  const d=getData(), day=getDay(d,todayKey());
+  day[field]=(Number.isFinite(day[field])?day[field]:0)+1;
+  const now=timeNow();
+  if(field==='coffee') day.timeline.push({type:'coffee', time:now});
+  if(field==='alcohol') day.timeline.push({type:'alcohol', time:now});
+  store.set(d); refreshKpi(); refreshDayTable(); refreshRecap(); toast(msg);
+}
+function saveEod(){
+  const d=getData(), day=getDay(d,todayKey());
+  const w=parseFloat($('#waterInput').value); if(!isNaN(w)) day.water=w;
+  const notes=$('#notesInput').value.trim(); if(notes) day.notes=notes;
+  day.locked=true; store.set(d);
+  refreshKpi(); refreshDayTable(); refreshRecap(); toast('Fin de journée enregistrée');
+}
+
 init();
 </script>
 </body>
