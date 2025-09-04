@@ -19,7 +19,7 @@
     button{cursor:pointer}
     button.primary{background:var(--accent);color:white}
     button.success{background:var(--ok);color:black}
-    .pill{padding:8px 10px;border-radius:999px;border:1px solid #2c3140;background:#161a24;cursor:pointer}
+    .pill{padding:8px 10px;border-radius:999px;border:1px solid #2c3140;background:#161a24;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
     .pill.active{outline:2px solid var(--accent)}
     .table{width:100%;border-collapse:collapse}
     .table th,.table td{border-bottom:1px solid #262a36;padding:8px;text-align:left;font-size:14px;white-space:nowrap}
@@ -31,7 +31,7 @@
     #errorBanner{background:#e53e3e;color:white;padding:10px;text-align:center;display:none}
     @media print{.btns,.toast,#errorBanner{display:none}}
 
-    /* Petites pastilles rondes de couleur (pour les entêtes du récap) */
+    /* Pastilles rondes (couleurs) */
     .dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #333;vertical-align:middle}
     .d0{background:#ffffff}   /* très clair */
     .d1{background:#fff4cc}   /* clair */
@@ -60,14 +60,22 @@
             <div class="row" id="urgRow"></div>
           </div>
         </div>
+
+        <div class="row" style="margin-top:10px">
+          <label>Retenue</label>
+          <div class="row" id="holdRow"></div>
+        </div>
+
         <div style="margin-top:10px">
           <label>Couleur</label>
           <div class="grid3" id="colorRow"></div>
         </div>
+
         <div class="row" style="margin-top:10px">
           <label>Fuite ?</label>
           <div class="row" id="leakRow"></div>
         </div>
+
         <div class="right" style="margin-top:12px">
           <button class="primary" id="addUrineBtn">Valider</button>
         </div>
@@ -95,12 +103,15 @@
 
       <div class="card">
         <h2>Tableau — Jour</h2>
-        <div class="btns">
+        <div class="btns" style="margin-bottom:8px">
+          <button id="exportTimelineCsvBtn">Exporter chronologie (CSV)</button>
           <button id="exportAllCsvBtn">Exporter toutes les mictions (CSV)</button>
         </div>
         <table class="table" id="dayTable">
           <thead>
-            <tr><th>Heure</th><th>Durée (s)</th><th>Couleur</th><th>Urgence</th><th>Fuite</th></tr>
+            <tr>
+              <th>Événement</th><th>Heure</th><th>Durée (s)</th><th>Couleur</th><th>Urgence</th><th>Fuite</th><th>Retenue</th>
+            </tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -150,11 +161,19 @@ const todayKey=()=>new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Bruss
 const timeNow=()=>new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'});
 const toast=msg=>{const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)};
 
-const BASE_DAY={urinations:[],water:null,notes:'',coffee:0,alcohol:0,night:0,locked:false};
-function normalizeDay(day){return {...BASE_DAY,...(day||{})}}
+const BASE_DAY={urinations:[],timeline:[],water:null,notes:'',coffee:0,alcohol:0,night:0,locked:false};
+function normalizeDay(day){
+  const d={...BASE_DAY,...(day||{})};
+  if(!Array.isArray(d.urinations)) d.urinations=[];
+  if(!Array.isArray(d.timeline)) d.timeline=[];
+  ['coffee','alcohol','night'].forEach(k=>{ if(!Number.isFinite(d[k])) d[k]=0; });
+  if(typeof d.locked!=='boolean') d.locked=false;
+  return d;
+}
 function getData(){const d=store.get();d.days=d.days||{};return d}
 function getDay(d,key){d.days[key]=normalizeDay(d.days[key]);return d.days[key]}
 function shortDate(iso){const [y,m,d]=iso.split('-');return `${d}/${m}/${String(y).slice(2)}`}
+const COLOR_LABELS=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
 
 /* ---------- KPIs & tables ---------- */
 function refreshKpi(){
@@ -166,10 +185,19 @@ function refreshKpi(){
 function refreshDayTable(){
   const d=getData(), day=getDay(d,todayKey());
   const tb=$('#dayTable tbody'); tb.innerHTML='';
-  const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
-  day.urinations.forEach(u=>{
+  // Timeline : si vide (anciens jours), reconstruire à partir des mictions
+  let timeline = day.timeline && day.timeline.length ? day.timeline.slice() : day.urinations.map(u=>({type:'miction', ...u}));
+  // Trier par heure HH:mm
+  timeline.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
+  timeline.forEach(ev=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${u.time}</td><td>${u.duration}</td><td>${labels[u.color]}</td><td>${u.urgency}</td><td>${u.leak?'Oui':'Non'}</td>`;
+    if(ev.type==='miction'){
+      tr.innerHTML=`<td>💧 Miction</td><td>${ev.time}</td><td>${ev.duration??''}</td><td>${COLOR_LABELS[ev.color]}</td><td>${ev.urgency}</td><td>${ev.leak?'Oui':'Non'}</td><td>${ev.hold?'Oui':'Non'}</td>`;
+    }else if(ev.type==='coffee'){
+      tr.innerHTML=`<td>☕ Café</td><td>${ev.time}</td><td></td><td></td><td></td><td></td><td></td>`;
+    }else if(ev.type==='alcohol'){
+      tr.innerHTML=`<td>🍺 Alcool</td><td>${ev.time}</td><td></td><td></td><td></td><td></td><td></td>`;
+    }
     tb.appendChild(tr);
   });
 }
@@ -194,15 +222,33 @@ function refreshRecap(){
 }
 
 /* ---------- Actions ---------- */
-const state={color:2,urgency:0,leak:false};
-function buildPills(container,labels,current,onPick){
+const state={color:2,urgency:0,leak:false,hold:false};
+function buildPills(container,items,current,onPick){
   container.innerHTML='';
-  labels.forEach((lb,i)=>{const b=document.createElement('div');b.className='pill'+(current===i?' active':'');b.textContent=lb;b.onclick=()=>{onPick(i);buildPills(container,labels,i,onPick)};container.appendChild(b)});
+  items.forEach((item,i)=>{
+    const b=document.createElement('div'); b.className='pill'+(current===i?' active':'');
+    if(typeof item==='string'){ b.textContent=item; }
+    else { b.innerHTML=item.html; b.title=item.title||''; }
+    b.onclick=()=>{ onPick(i); buildPills(container,items,i,onPick); };
+    container.appendChild(b);
+  });
+}
+function buildColorPills(){
+  const items=[
+    {html:'<span class="dot d0"></span>', title:'Très clair'},
+    {html:'<span class="dot d1"></span>', title:'Clair'},
+    {html:'<span class="dot d2"></span>', title:'Jaune'},
+    {html:'<span class="dot d3"></span>', title:'Jaune foncé'},
+    {html:'<span class="dot d4"></span>', title:'Ambré'},
+  ];
+  buildPills($('#colorRow'), items, state.color, i=>state.color=i);
 }
 function addUrine(){
   const d=getData(), day=getDay(d,todayKey());
   const dur=parseInt($('#durInput').value,10)||0;
-  day.urinations.push({time:timeNow(),duration:dur,color:state.color,urgency:state.urgency,leak:state.leak});
+  const ev={time:timeNow(),duration:dur,color:state.color,urgency:state.urgency,leak:state.leak,hold:state.hold};
+  day.urinations.push(ev);
+  day.timeline.push({type:'miction', ...ev});
   store.set(d);
   $('#durInput').value='';
   refreshKpi(); refreshDayTable(); refreshRecap();
@@ -211,14 +257,17 @@ function addUrine(){
 function inc(field,msg){
   const d=getData(), day=getDay(d,todayKey());
   day[field]=(Number.isFinite(day[field])?day[field]:0)+1;
-  store.set(d); refreshKpi(); refreshRecap(); toast(msg);
+  const now=timeNow();
+  if(field==='coffee') day.timeline.push({type:'coffee', time:now});
+  if(field==='alcohol') day.timeline.push({type:'alcohol', time:now});
+  store.set(d); refreshKpi(); refreshDayTable(); refreshRecap(); toast(msg);
 }
 function saveEod(){
   const d=getData(), day=getDay(d,todayKey());
   const w=parseFloat($('#waterInput').value); if(!isNaN(w)) day.water=w;
   const notes=$('#notesInput').value.trim(); if(notes) day.notes=notes;
   day.locked=true; store.set(d);
-  refreshKpi(); refreshRecap(); toast('Fin de journée enregistrée');
+  refreshKpi(); refreshDayTable(); refreshRecap(); toast('Fin de journée enregistrée');
 }
 
 /* ---------- Exports ---------- */
@@ -239,15 +288,37 @@ function exportCSV(){
 }
 function exportAllCSV(){
   const d=getData();
-  const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite"]];
-  const labels=['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
+  const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
   const keys=Object.keys(d.days).sort();
   keys.forEach(k=>{
     const day=getDay(d,k);
-    day.urinations.forEach(u=>{ rows.push([k,u.time,u.duration,labels[u.color],u.urgency,u.leak?'Oui':'Non']); });
+    day.urinations.forEach(u=>{
+      rows.push([k,u.time,u.duration,COLOR_LABELS[u.color],u.urgency,u.leak?'Oui':'Non',u.hold?'Oui':'Non']);
+    });
   });
   const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
   download(csv,'mictions-completes.csv','text/csv');
+}
+function exportTimelineCSV(){
+  const d=getData();
+  const rows=[["Date","Heure","Événement","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
+  const keys=Object.keys(d.days).sort();
+  keys.forEach(k=>{
+    const day=getDay(d,k);
+    let tl = day.timeline && day.timeline.length ? day.timeline.slice() : day.urinations.map(u=>({type:'miction', ...u}));
+    tl.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
+    tl.forEach(ev=>{
+      if(ev.type==='miction'){
+        rows.push([k,ev.time,'Miction',ev.duration,COLOR_LABELS[ev.color],ev.urgency,ev.leak?'Oui':'Non',ev.hold?'Oui':'Non']);
+      }else if(ev.type==='coffee'){
+        rows.push([k,ev.time,'Café','','','','','']);
+      }else if(ev.type==='alcohol'){
+        rows.push([k,ev.time,'Alcool','','','','','']);
+      }
+    });
+  });
+  const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+  download(csv,'chronologie-jour.csv','text/csv');
 }
 function exportJSON(){const d=getData();download(JSON.stringify(d,null,2),'backup-urine.json','application/json')}
 function importJSON(ev){
@@ -261,19 +332,26 @@ function download(content,filename,type){const a=document.createElement('a');a.h
 /* ---------- Init ---------- */
 function init(){
   $('#todayLabel').textContent=new Date().toLocaleDateString('fr-BE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
-  buildPills($('#urgRow'),['0','1','2','3'],0,i=>state.urgency=i);
-  buildPills($('#leakRow'),['Non','Oui'],0,i=>state.leak=(i===1));
-  buildPills($('#colorRow'),['Très clair','Clair','Jaune','Jaune foncé','Ambré'],2,i=>state.color=i);
+
+  // Pastilles/choix
+  buildPills($('#urgRow'), ['0','1','2','3'], 0, i=>state.urgency=i);
+  buildPills($('#holdRow'), ['Non','Oui'], 0, i=>state.hold=(i===1));
+  buildPills($('#leakRow'), ['Non','Oui'], 0, i=>state.leak=(i===1));
+  buildColorPills();
+
   refreshKpi(); refreshDayTable(); refreshRecap();
 
+  // Actions
   $('#addUrineBtn').onclick=addUrine;
   $('#coffeeBtn').onclick=()=>inc('coffee','+1 café');
   $('#alcoholBtn').onclick=()=>inc('alcohol','+1 alcool');
   $('#nightBtn').onclick=()=>inc('night','+1 nuit');
   $('#saveEodBtn').onclick=saveEod;
 
-  $('#exportCsvBtn').onclick=exportCSV;
+  // Exports
+  $('#exportTimelineCsvBtn').onclick=exportTimelineCSV;
   $('#exportAllCsvBtn').onclick=exportAllCSV;
+  $('#exportCsvBtn').onclick=exportCSV;
   $('#exportJsonBtn').onclick=exportJSON;
   $('#importJsonBtn').onclick=()=>$('#importFile').click();
   $('#importFile').addEventListener('change',importJSON);
