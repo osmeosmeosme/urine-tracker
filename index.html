@@ -6,20 +6,21 @@
   <title>Analyse urine — suivi perso</title>
   <meta name="theme-color" content="#111" />
   <style>
-    :root{--bg:#0f1115;--panel:#171a20;--muted:#8b8f98;--text:#e7e9ee;--accent:#4f8cff;--ok:#38c172}
+    :root{--bg:#0f1115;--panel:#171a20;--muted:#8b8f98;--text:#e7e9ee;--accent:#4f8cff;--ok:#38c172;--bad:#e53e3e}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:var(--bg);color:var(--text)}
     .wrap{max-width:680px;margin:0 auto;padding:16px}
     h1{font-size:22px;margin:8px 0 16px}
     h2{font-size:18px;margin:20px 0 10px}
     .card{background:var(--panel);border:1px solid #232733;border-radius:16px;padding:14px;margin:12px 0}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .stack{display:grid;grid-template-columns:1fr;gap:10px} /* empile tout en vertical */
+    .stack{display:grid;grid-template-columns:1fr;gap:10px}
     .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-    input,button,textarea{padding:10px;border-radius:12px;border:1px solid #313543;background:#0f1218;color:var(--text)}
+    input,button,textarea,select{padding:10px;border-radius:12px;border:1px solid #313543;background:#0f1218;color:var(--text)}
     textarea{resize:vertical;min-height:120px}
     button{cursor:pointer}
     button.primary{background:var(--accent);color:white}
     button.success{background:var(--ok);color:black}
+    button.danger{background:var(--bad);color:white}
     .pill{padding:8px 10px;border-radius:999px;border:1px solid #2c3140;background:#161a24;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
     .pill.active{outline:2px solid var(--accent)}
     .table{width:100%;border-collapse:collapse}
@@ -30,6 +31,8 @@
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#11151f;border:1px solid #2a3142;padding:10px 14px;border-radius:12px;color:white;opacity:0;transition:all .25s}
     .toast.show{opacity:1;bottom:26px}
     #errorBanner{background:#e53e3e;color:white;padding:10px;text-align:center;display:none}
+    .action-btn{padding:6px 8px;border-radius:8px; border:1px solid #2a3142; background:#151a24; font-size:13px}
+    .action-btn + .action-btn{margin-left:6px}
 
     /* Pastilles rondes (couleurs) */
     .dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #333;vertical-align:middle;margin-right:6px}
@@ -39,10 +42,18 @@
     .d3{background:#f7c04a}
     .d4{background:#d79a3c}
 
-    /* Fin de journée en colonne (mobile-friendly) */
+    /* Fin de journée en colonne */
     #eodCard .stack{grid-template-columns:1fr}
 
-    @media print{.btns,.toast,#errorBanner{display:none}}
+    /* Modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+    .modal .box{background:#131722;border:1px solid #263044;border-radius:16px;max-width:520px;width:100%;padding:16px}
+    .modal .hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .modal .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .modal .grid-1{display:grid;grid-template-columns:1fr;gap:10px}
+    .modal .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+
+    @media print{.btns,.toast,#errorBanner,.action-btn,.modal{display:none}}
   </style>
 </head>
 <body>
@@ -54,38 +65,31 @@
 
     <div class="card">
       <h2>J’urine</h2>
-
       <div class="stack">
         <div>
           <label>Durée (s)</label>
           <input id="durInput" type="number" min="0" placeholder="ex. 7" />
         </div>
-
         <div>
           <label>Volume (mL) — optionnel</label>
           <input id="volInput" type="number" min="0" step="1" placeholder="ex. 200" />
         </div>
-
         <div>
           <label>Urgence (0–3)</label>
           <div class="row" id="urgRow"></div>
         </div>
-
         <div>
           <label>Retenue</label>
           <div class="row" id="holdRow"></div>
         </div>
-
         <div>
           <label>Couleur</label>
           <div class="grid3" id="colorRow"></div>
         </div>
-
         <div>
           <label>Fuite ?</label>
           <div class="row" id="leakRow"></div>
         </div>
-
         <div class="row" style="justify-content:flex-end">
           <button class="primary" id="addUrineBtn">Valider</button>
         </div>
@@ -135,6 +139,7 @@
             <th title="Urgence">⚠️</th>
             <th title="Fuite">💦</th>
             <th title="Retenue">✋</th>
+            <th title="Actions"></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -174,15 +179,77 @@
     </div>
   </div>
 
+  <!-- MODAL EDIT -->
+  <div class="modal" id="editModal" aria-hidden="true">
+    <div class="box">
+      <div class="hdr">
+        <h3 id="editTitle" style="margin:0">Modifier</h3>
+        <button class="action-btn" id="closeModalBtn">✕</button>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label>Type</label>
+          <select id="editType">
+            <option value="miction">Miction</option>
+            <option value="coffee">Café</option>
+            <option value="alcohol">Alcool</option>
+          </select>
+        </div>
+        <div>
+          <label>Heure</label>
+          <input id="editTime" type="time" />
+        </div>
+      </div>
+
+      <div id="editMictionFields" class="grid">
+        <div>
+          <label>Durée (s)</label>
+          <input id="editDur" type="number" min="0" />
+        </div>
+        <div>
+          <label>Volume (mL)</label>
+          <input id="editVol" type="number" min="0" step="1" />
+        </div>
+        <div>
+          <label>Couleur</label>
+          <select id="editColor">
+            <option value="0">Très clair</option>
+            <option value="1">Clair</option>
+            <option value="2">Jaune</option>
+            <option value="3">Jaune foncé</option>
+            <option value="4">Ambré</option>
+          </select>
+        </div>
+        <div>
+          <label>Urgence (0–3)</label>
+          <select id="editUrg">
+            <option>0</option><option>1</option><option>2</option><option>3</option>
+          </select>
+        </div>
+        <div>
+          <label>Fuite</label>
+          <select id="editLeak"><option>Non</option><option>Oui</option></select>
+        </div>
+        <div>
+          <label>Retenue</label>
+          <select id="editHold"><option>Non</option><option>Oui</option></select>
+        </div>
+      </div>
+
+      <div class="btns">
+        <button class="danger" id="deleteBtn">🗑️ Supprimer</button>
+        <button class="success" id="saveEditBtn">💾 Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
 /* ===== Helpers & storage ===== */
 const $ = s => document.querySelector(s);
-const store = {
-  get: () => JSON.parse(localStorage.getItem('urine-app') || '{}'),
-  set: d => localStorage.setItem('urine-app', JSON.stringify(d)),
-};
+const store = { get: () => JSON.parse(localStorage.getItem('urine-app') || '{}'), set: d => localStorage.setItem('urine-app', JSON.stringify(d)) };
 const todayKey = () => new Date().toLocaleDateString('fr-CA',{timeZone:'Europe/Brussels'}); // YYYY-MM-DD
 const timeNow  = () => new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'});
 const toast = msg => { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); };
@@ -190,41 +257,23 @@ const toast = msg => { const t=$('#toast'); t.textContent=msg; t.classList.add('
 const BASE_DAY = { urinations:[], timeline:[], water:null, notes:'', coffee:0, alcohol:0, night:0, locked:false };
 const COLOR_LABELS = ['Très clair','Clair','Jaune','Jaune foncé','Ambré'];
 
-/* ===== Migration douce (préserve 100% des données) ===== */
+/* ===== Migration (préserve 100% des données) ===== */
 function migrateData(d){
   d.days = d.days || {};
   for(const k of Object.keys(d.days)){
     const day = d.days[k] || {};
-    // Assurer les clés sans écraser l'existant
     if(!Array.isArray(day.urinations)) day.urinations = [];
-    if(!Array.isArray(day.timeline)) day.timeline = [];           // nouvelle timeline
+    if(!Array.isArray(day.timeline)) day.timeline = day.urinations.map(u=>({type:'miction', ...u}));
     if(typeof day.coffee !== 'number') day.coffee = 0;
     if(typeof day.alcohol !== 'number') day.alcohol = 0;
     if(typeof day.night !== 'number') day.night = 0;
     if(typeof day.locked !== 'boolean') day.locked = false;
-
-    // Si timeline est vide mais qu'il y a des mictions, on pré-remplit pour l'affichage
-    if(day.timeline.length === 0 && day.urinations.length > 0){
-      day.timeline = day.urinations.map(u => ({type:'miction', ...u}));
-    }
-
-    // Ne JAMAIS supprimer/renommer une propriété existante
     d.days[k] = day;
   }
   return d;
 }
-function getData(){
-  let d = store.get();
-  d = migrateData(d);
-  store.set(d); // on sauvegarde la version migrée
-  return d;
-}
-function getDay(d,key){
-  d.days[key] = d.days[key] || {...BASE_DAY};
-  // migration au niveau jour (si ajouté récemment)
-  d.days[key] = migrateData({days:{[key]:d.days[key]}}).days[key];
-  return d.days[key];
-}
+function getData(){ let d=store.get(); d=migrateData(d); store.set(d); return d; }
+function getDay(d,key){ d.days[key] = d.days[key] || {...BASE_DAY}; d.days[key]=migrateData({days:{[key]:d.days[key]}}).days[key]; return d.days[key]; }
 function shortDate(iso){ const [y,m,d]=iso.split('-'); return `${d}/${m}/${String(y).slice(2)}`; }
 
 /* ===== State ===== */
@@ -236,8 +285,7 @@ function buildPills(container, items, current, onPick){
   items.forEach((item,i)=>{
     const b=document.createElement('div');
     b.className='pill'+(current===i?' active':'');
-    if(typeof item==='string'){ b.textContent=item; }
-    else{ b.innerHTML=item.html; b.title=item.title||''; }
+    if(typeof item==='string'){ b.textContent=item; } else { b.innerHTML=item.html; b.title=item.title||''; }
     b.onclick=()=>{ onPick(i); buildPills(container, items, i, onPick); };
     container.appendChild(b);
   });
@@ -263,17 +311,32 @@ function refreshKpi(){
 function refreshDayTable(){
   const d=getData(), day=getDay(d,todayKey());
   const tb=$('#dayTable tbody'); tb.innerHTML='';
-  let tl = Array.isArray(day.timeline) ? day.timeline.slice() : [];
-  if(tl.length===0 && Array.isArray(day.urinations)) tl = day.urinations.map(u=>({type:'miction', ...u}));
-  tl.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
-  tl.forEach(ev=>{
+
+  // Build pairs {idx, ev} where idx is the index inside timeline
+  const list = (day.timeline||[]).map((ev,idx)=>({idx, ev}));
+  list.sort((a,b)=>String(a.ev.time||'').localeCompare(String(b.ev.time||'')));
+
+  list.forEach(({idx,ev})=>{
     const tr=document.createElement('tr');
     if(ev.type==='miction'){
-      tr.innerHTML=`<td title="Miction">🌊</td><td>${ev.time||''}</td><td>${ev.duration??''}</td><td>${(ev.volume!=null && !isNaN(ev.volume))?ev.volume:''}</td><td><span class="dot d${ev.color??2}"></span>${COLOR_LABELS[ev.color??2]}</td><td>${ev.urgency??''}</td><td>${ev.leak?'Oui':'Non'}</td><td>${ev.hold?'Oui':'Non'}</td>`;
+      tr.innerHTML=
+        `<td title="Miction">🌊</td>`+
+        `<td>${ev.time||''}</td>`+
+        `<td>${ev.duration??''}</td>`+
+        `<td>${(ev.volume!=null && !isNaN(ev.volume))?ev.volume:''}</td>`+
+        `<td><span class="dot d${ev.color??2}"></span>${COLOR_LABELS[ev.color??2]}</td>`+
+        `<td>${ev.urgency??''}</td>`+
+        `<td>${ev.leak?'Oui':'Non'}</td>`+
+        `<td>${ev.hold?'Oui':'Non'}</td>`+
+        `<td><button class="action-btn" onclick="openEdit(${idx})">✏️</button><button class="action-btn" onclick="deleteRow(${idx})">🗑️</button></td>`;
     }else if(ev.type==='coffee'){
-      tr.innerHTML=`<td title="Café">☕</td><td>${ev.time||''}</td><td></td><td></td><td></td><td></td><td></td><td></td>`;
+      tr.innerHTML=
+        `<td title="Café">☕</td><td>${ev.time||''}</td><td></td><td></td><td></td><td></td><td></td><td></td>`+
+        `<td><button class="action-btn" onclick="openEdit(${idx})">✏️</button><button class="action-btn" onclick="deleteRow(${idx})">🗑️</button></td>`;
     }else if(ev.type==='alcohol'){
-      tr.innerHTML=`<td title="Alcool">🍺</td><td>${ev.time||''}</td><td></td><td></td><td></td><td></td><td></td><td></td>`;
+      tr.innerHTML=
+        `<td title="Alcool">🍺</td><td>${ev.time||''}</td><td></td><td></td><td></td><td></td><td></td><td></td>`+
+        `<td><button class="action-btn" onclick="openEdit(${idx})">✏️</button><button class="action-btn" onclick="deleteRow(${idx})">🗑️</button></td>`;
     }
     tb.appendChild(tr);
   });
@@ -282,8 +345,8 @@ function refreshRecap(){
   const d=getData(); const keys=Object.keys(d.days).sort(); const tb=$('#recapTable tbody'); tb.innerHTML='';
   keys.forEach(k=>{
     const day=getDay(d,k);
-    const counts=[0,0,0,0,0]; (day.urinations||[]).forEach(u=>{ const c = (u.color??2); if(Number.isFinite(c) && counts[c]!=null) counts[c]++; });
-    const urg=(day.urinations||[]).length ? ((day.urinations||[]).reduce((s,u)=>s+(u.urgency||0),0)/(day.urinations||[]).length):0;
+    const counts=[0,0,0,0,0]; (day.urinations||[]).forEach(u=>{ const c=(u.color??2); if(Number.isFinite(c)&&counts[c]!=null) counts[c]++; });
+    const urg=(day.urinations||[]).length?((day.urinations||[]).reduce((s,u)=>s+(u.urgency||0),0)/(day.urinations||[]).length):0;
     const leaks=(day.urinations||[]).reduce((s,u)=>s+(u.leak?1:0),0);
     const tr=document.createElement('tr');
     tr.innerHTML =
@@ -302,26 +365,11 @@ function addUrine(){
   const d=getData(), day=getDay(d,todayKey());
   const dur = parseInt($('#durInput').value,10) || 0;
   const vol = parseFloat($('#volInput').value);
-
-  const ev = {
-    time: timeNow(),
-    duration: dur,
-    volume: (isNaN(vol)? undefined : vol),
-    color: state.color,
-    urgency: state.urgency,
-    leak: state.leak,
-    hold: state.hold
-  };
-  day.urinations = day.urinations || [];
-  day.timeline   = day.timeline   || [];
+  const ev = { time: timeNow(), duration: dur, volume:(isNaN(vol)?undefined:vol), color: state.color, urgency: state.urgency, leak: state.leak, hold: state.hold };
   day.urinations.push(ev);
   day.timeline.push({type:'miction', ...ev});
   store.set(d);
-
-  // reset des champs
-  $('#durInput').value = '';
-  $('#volInput').value = '';
-
+  $('#durInput').value=''; $('#volInput').value='';
   refreshKpi(); refreshDayTable(); refreshRecap();
   toast('Miction ajoutée');
 }
@@ -329,20 +377,124 @@ function inc(field,msg){
   const d=getData(), day=getDay(d,todayKey());
   day[field]=(Number.isFinite(day[field])?day[field]:0)+1;
   const now=timeNow();
-  day.timeline = day.timeline || [];
-  if(field==='coffee')  day.timeline.push({type:'coffee',  time:now});
+  if(field==='coffee') day.timeline.push({type:'coffee', time:now});
   if(field==='alcohol') day.timeline.push({type:'alcohol', time:now});
   store.set(d);
-  refreshKpi(); refreshDayTable(); refreshRecap();
-  toast(msg);
+  refreshKpi(); refreshDayTable(); refreshRecap(); toast(msg);
 }
 function saveEod(){
   const d=getData(), day=getDay(d,todayKey());
   const w=parseFloat($('#waterInput').value); if(!isNaN(w)) day.water=w;
   const notes=$('#notesInput').value.trim(); if(notes) day.notes=notes;
   day.locked=true; store.set(d);
+  refreshKpi(); refreshDayTable(); refreshRecap(); toast('Fin de journée enregistrée');
+}
+
+/* ===== Edit / Delete ===== */
+let editingIndex = null; // index dans day.timeline d’aujourd’hui
+
+function openEdit(idx){
+  editingIndex = idx;
+  const d=getData(), day=getDay(d,todayKey());
+  const ev = day.timeline[idx]; if(!ev){ toast('Élément introuvable'); return; }
+
+  // Remplir le formulaire
+  $('#editType').value = ev.type || 'miction';
+  $('#editTime').value = (ev.time && ev.time.length===5) ? ev.time : (ev.time||'').slice(0,5);
+
+  if(ev.type==='miction'){
+    $('#editMictionFields').style.display='grid';
+    $('#editDur').value = ev.duration ?? '';
+    $('#editVol').value = (ev.volume!=null && !isNaN(ev.volume)) ? ev.volume : '';
+    $('#editColor').value = String(ev.color ?? 2);
+    $('#editUrg').value   = String(ev.urgency ?? 0);
+    $('#editLeak').value  = ev.leak ? 'Oui' : 'Non';
+    $('#editHold').value  = ev.hold ? 'Oui' : 'Non';
+  }else{
+    $('#editMictionFields').style.display='none';
+    $('#editDur').value = ''; $('#editVol').value=''; // nettoie
+  }
+
+  $('#editModal').style.display='flex';
+  $('#editTitle').textContent = ev.type==='miction' ? 'Modifier la miction' : (ev.type==='coffee'?'Modifier le café':'Modifier l’alcool');
+}
+$('#editType').addEventListener('change',()=>{
+  const v=$('#editType').value;
+  $('#editMictionFields').style.display = (v==='miction') ? 'grid' : 'none';
+});
+
+$('#closeModalBtn').onclick = ()=>{ $('#editModal').style.display='none'; editingIndex=null; };
+
+$('#saveEditBtn').onclick = ()=>{
+  if(editingIndex==null) return;
+  const d=getData(), day=getDay(d,todayKey());
+  const ev = day.timeline[editingIndex]; if(!ev){ toast('Élément introuvable'); return; }
+
+  const newType = $('#editType').value;
+  const newTime = $('#editTime').value || (ev.time||'');
+  const hhmm = newTime.length===5 ? newTime : (String(newTime).slice(0,5));
+
+  if(newType==='miction'){
+    const dur = parseInt($('#editDur').value,10);
+    const vol = parseFloat($('#editVol').value);
+    const color = parseInt($('#editColor').value,10);
+    const urg = parseInt($('#editUrg').value,10);
+    const leak = $('#editLeak').value==='Oui';
+    const hold = $('#editHold').value==='Oui';
+
+    // Mettre à jour timeline
+    day.timeline[editingIndex] = {type:'miction', time: hhmm, duration: isNaN(dur)?undefined:dur, volume:(isNaN(vol)?undefined:vol), color: (Number.isFinite(color)?color:2), urgency: (Number.isFinite(urg)?urg:0), leak, hold};
+
+    // Mettre à jour aussi la collection urinations si l’élément existait comme miction
+    // Trouver la miction correspondante (par l’ancienne heure+valeurs). Si aucune correspondance, on essaie meilleur-effort par index proche de fin.
+    // Ici, stratégie simple : si ev.type était miction, on remplace la première miction du jour à la même heure, sinon on en ajoute une nouvelle cohérente.
+    if(ev.type==='miction'){
+      const i = (day.urinations||[]).findIndex(u=>u.time===ev.time && u.duration===ev.duration && u.color===ev.color && u.urgency===ev.urgency && !!u.leak===!!ev.leak && !!u.hold===!!ev.hold);
+      const newU = {time:hhmm, duration:isNaN(dur)?undefined:dur, volume:(isNaN(vol)?undefined:vol), color:(Number.isFinite(color)?color:2), urgency:(Number.isFinite(urg)?urg:0), leak, hold};
+      if(i>=0) day.urinations[i] = newU; else day.urinations.push(newU);
+    }else{
+      // converti d’un café/alcool vers miction -> on ajoute la miction
+      day.urinations.push({time:hhmm, duration:isNaN(dur)?undefined:dur, volume:(isNaN(vol)?undefined:vol), color:(Number.isFinite(color)?color:2), urgency:(Number.isFinite(urg)?urg:0), leak, hold});
+      // et on incrémente KPI si besoin ? (non, KPIs s’appuient sur urinations[].length pour pipis ; pas besoin d’ajouter autre chose)
+    }
+
+  }else{
+    // Changement vers café/alcool (ou simple édition d’heure)
+    day.timeline[editingIndex] = {type:newType, time: hhmm};
+
+    // Si on convertit une miction vers café/alcool, on retire la miction associée des urinations
+    if(ev.type==='miction'){
+      const i = (day.urinations||[]).findIndex(u=>u.time===ev.time && u.duration===ev.duration && u.color===ev.color && u.urgency===ev.urgency && !!u.leak===!!ev.leak && !!u.hold===!!ev.hold);
+      if(i>=0) day.urinations.splice(i,1);
+    }
+    // Ajuster KPI cafés/alcools selon conversion
+    if(ev.type!=='coffee' && newType==='coffee'){ day.coffee=(day.coffee||0)+1; }
+    if(ev.type==='coffee' && newType!=='coffee'){ day.coffee=Math.max(0,(day.coffee||0)-1); }
+    if(ev.type!=='alcohol' && newType==='alcohol'){ day.alcohol=(day.alcohol||0)+1; }
+    if(ev.type==='alcohol' && newType!=='alcohol'){ day.alcohol=Math.max(0,(day.alcohol||0)-1); }
+  }
+
+  store.set(d);
+  $('#editModal').style.display='none'; editingIndex=null;
   refreshKpi(); refreshDayTable(); refreshRecap();
-  toast('Fin de journée enregistrée');
+  toast('Modifié');
+};
+
+function deleteRow(idx){
+  const d=getData(), day=getDay(d,todayKey());
+  const ev = day.timeline[idx]; if(!ev){ toast('Élément introuvable'); return; }
+
+  // Retirer des collections
+  if(ev.type==='miction'){
+    const i = (day.urinations||[]).findIndex(u=>u.time===ev.time && u.duration===ev.duration && u.color===ev.color && u.urgency===ev.urgency && !!u.leak===!!ev.leak && !!u.hold===!!ev.hold);
+    if(i>=0) day.urinations.splice(i,1);
+  }else if(ev.type==='coffee'){ day.coffee=Math.max(0,(day.coffee||0)-1); }
+  else if(ev.type==='alcohol'){ day.alcohol=Math.max(0,(day.alcohol||0)-1); }
+
+  day.timeline.splice(idx,1);
+  store.set(d);
+  refreshKpi(); refreshDayTable(); refreshRecap();
+  toast('Supprimé');
 }
 
 /* ===== Exports ===== */
@@ -396,7 +548,6 @@ function download(content,filename,type){ const a=document.createElement('a'); a
 function init(){
   $('#todayLabel').textContent=new Date().toLocaleDateString('fr-BE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
 
-  // Pastilles/choix
   buildPills($('#urgRow'), ['0','1','2','3'], 0, i=>state.urgency=i);
   buildPills($('#holdRow'), ['Non','Oui'], 0, i=>state.hold=(i===1));
   buildPills($('#leakRow'), ['Non','Oui'], 0, i=>state.leak=(i===1));
@@ -404,14 +555,12 @@ function init(){
 
   refreshKpi(); refreshDayTable(); refreshRecap();
 
-  // Actions
   $('#addUrineBtn').onclick = addUrine;
   $('#coffeeBtn').onclick  = () => inc('coffee','+1 café');
   $('#alcoholBtn').onclick = () => inc('alcohol','+1 alcool');
   $('#nightBtn').onclick   = () => inc('night','+1 nuit');
   $('#saveEodBtn').onclick = saveEod;
 
-  // Exports
   $('#exportTimelineCsvBtn').onclick = exportTimelineCSV;
   $('#exportAllCsvBtn').onclick      = exportAllCSV;
   $('#exportCsvBtn').onclick         = exportCSV;
