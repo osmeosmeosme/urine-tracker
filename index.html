@@ -54,16 +54,21 @@
 
     <div class="card">
       <h2>J’urine</h2>
-      <div class="grid2">
+      <div class="grid3">
         <div>
           <label>Durée (s)</label>
           <input id="durInput" type="number" min="0" placeholder="ex. 7" />
+        </div>
+        <div>
+          <label>Volume (mL) — optionnel</label>
+          <input id="volInput" type="number" min="0" step="1" placeholder="ex. 200" />
         </div>
         <div>
           <label>Urgence</label>
           <div class="row" id="urgRow"></div>
         </div>
       </div>
+
 
       <div class="row" style="margin-top:10px">
         <label>Retenue</label>
@@ -123,6 +128,7 @@
             <th title="Événement"></th>
             <th title="Heure">🕒</th>
             <th title="Durée (s)">⏱️</th>
+            <th title="Volume (mL)">🧪</th>
             <th title="Couleur">🎨</th>
             <th title="Urgence">⚠️</th>
             <th title="Fuite">💦</th>
@@ -227,7 +233,17 @@ function refreshDayTable(){
   tl.forEach(ev=>{
     const tr=document.createElement('tr');
     if(ev.type==='miction'){
-      tr.innerHTML=`<td title="Miction">🌊</td><td>${ev.time}</td><td>${ev.duration??''}</td><td><span class="dot d${ev.color}"></span>${COLOR_LABELS[ev.color]}</td><td>${ev.urgency}</td><td>${ev.leak?'Oui':'Non'}</td><td>${ev.hold?'Oui':'Non'}</td>`;
+      tr.innerHTML =
+        `<td title="Miction">🌊</td>`+
+        `<td>${ev.time}</td>`+
+        `<td>${ev.duration??''}</td>`+
+        `<td>${(ev.volume!=null && !isNaN(ev.volume)) ? ev.volume : ''}</td>`+
+        `<td><span class="dot d${ev.color}"></span>${COLOR_LABELS[ev.color]}</td>`+
+        `<td>${ev.urgency}</td>`+
+        `<td>${ev.leak?'Oui':'Non'}</td>`+
+        `<td>${ev.hold?'Oui':'Non'}</td>`;
+    }
+
     }else if(ev.type==='coffee'){
       tr.innerHTML=`<td title="Café">☕</td><td>${ev.time}</td><td></td><td></td><td></td><td></td><td></td>`;
     }else if(ev.type==='alcohol'){
@@ -258,14 +274,31 @@ function refreshRecap(){
 /* ===== Actions ===== */
 function addUrine(){
   const d=getData(), day=getDay(d,todayKey());
-  const dur=parseInt($('#durInput').value,10)||0;
-  const ev={time:timeNow(),duration:dur,color:state.color,urgency:state.urgency,leak:state.leak,hold:state.hold};
+  const dur = parseInt($('#durInput').value,10) || 0;
+  const vol = parseFloat($('#volInput').value); // peut être NaN si laissé vide
+
+  const ev = {
+    time: timeNow(),
+    duration: dur,
+    volume: isNaN(vol) ? undefined : vol, // on enregistre seulement si renseigné
+    color: state.color,
+    urgency: state.urgency,
+    leak: state.leak,
+    hold: state.hold
+  };
+
   day.urinations.push(ev);
   day.timeline.push({type:'miction', ...ev});
   store.set(d);
-  $('#durInput').value='';
+
+  // reset des champs
+  $('#durInput').value = '';
+  $('#volInput').value = '';
+
   refreshKpi(); refreshDayTable(); refreshRecap();
   toast('Miction ajoutée');
+}
+
 }
 function inc(field,msg){
   const d=getData(), day=getDay(d,todayKey());
@@ -299,21 +332,40 @@ function exportCSV(){
   download(csv,'recap-complet.csv','text/csv');
 }
 function exportAllCSV(){
-  const d=getData(); const rows=[["Date","Heure","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
+  const rows=[["Date","Heure","Durée (s)","Volume (mL)","Couleur","Urgence","Fuite","Retenue"]];
   Object.keys(d.days).sort().forEach(k=>{
     const day=getDay(d,k);
-    day.urinations.forEach(u=>rows.push([k,u.time,u.duration,COLOR_LABELS[u.color],u.urgency,u.leak?'Oui':'Non',u.hold?'Oui':'Non']));
+    day.urinations.forEach(u=>rows.push([
+    k,
+    u.time,
+    u.duration,
+    (u.volume!=null && !isNaN(u.volume)) ? u.volume : '',
+    COLOR_LABELS[u.color],
+    u.urgency,
+    u.leak ? 'Oui' : 'Non',
+    u.hold ? 'Oui' : 'Non'
+    ]);
+
   });
   const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
   download(csv,'mictions-completes.csv','text/csv');
 }
 function exportTimelineCSV(){
-  const d=getData(); const rows=[["Date","Heure","Événement","Durée (s)","Couleur","Urgence","Fuite","Retenue"]];
+  const rows=[["Date","Heure","Événement","Durée (s)","Volume (mL)","Couleur","Urgence","Fuite","Retenue"]];
   Object.keys(d.days).sort().forEach(k=>{
     const day=getDay(d,k); let tl = day.timeline && day.timeline.length ? day.timeline.slice() : day.urinations.map(u=>({type:'miction', ...u}));
     tl.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
     tl.forEach(ev=>{
-      if(ev.type==='miction') rows.push([k,ev.time,'Miction',ev.duration,COLOR_LABELS[ev.color],ev.urgency,ev.leak?'Oui':'Non',ev.hold?'Oui':'Non']);
+      if(ev.type==='miction')rows.push([
+        k, ev.time, 'Miction',
+        ev.duration,
+        (ev.volume!=null && !isNaN(ev.volume)) ? ev.volume : '',
+        COLOR_LABELS[ev.color],
+        ev.urgency,
+        ev.leak ? 'Oui' : 'Non',
+        ev.hold ? 'Oui' : 'Non'
+      ]);
+
       else if(ev.type==='coffee') rows.push([k,ev.time,'Café','','','','','']);
       else if(ev.type==='alcohol') rows.push([k,ev.time,'Alcool','','','','','']);
     });
